@@ -37,22 +37,60 @@ sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-## 3. Enviar o sistema
+## 3. Levar o código para o servidor
 
-No Windows, na pasta `monitor-seguranca-pb`, dê dois cliques em **`empacotar.bat`**. Ele gera
-`monitor-deploy.tar.gz` (cerca de 60 KB), **sem** o banco local e sem senhas. Envie para o servidor:
+O código está no repositório privado **https://github.com/Flaviusred/monitor-seguranca-pb**.
+O servidor baixa por uma **chave de implantação** (deploy key): só lê, só este repositório.
+
+### Opção A — pelo Git (recomendada)
+
+No servidor, crie a chave e mostre a parte pública:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/monitor_deploy -N "" -C "servidor-testes-monitor"
+cat ~/.ssh/monitor_deploy.pub
+```
+
+Cadastre a chave no GitHub, **sem** marcar "Allow write access": no repositório, vá em
+**Settings → Deploy keys → Add deploy key** e cole o conteúdo exibido. Ou, no Windows, salve o conteúdo
+num arquivo `chave.pub` e rode:
+
+```powershell
+gh repo deploy-key add chave.pub --repo Flaviusred/monitor-seguranca-pb --title "servidor-testes"
+```
+
+De volta ao servidor, aponte o GitHub para essa chave e baixe o código:
+
+```bash
+cat >> ~/.ssh/config <<'EOF'
+Host github-monitor
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/monitor_deploy
+  IdentitiesOnly yes
+EOF
+git clone git@github-monitor:Flaviusred/monitor-seguranca-pb.git ~/monitor
+cd ~/monitor
+cp .env.exemplo .env
+nano .env
+```
+
+### Opção B — por pacote (sem Git no servidor)
+
+No Windows, dê dois cliques em **`empacotar.bat`**. Ele gera `monitor-deploy.tar.gz` (cerca de 60 KB),
+**sem** o banco local e sem senhas. Envie e descompacte:
 
 ```powershell
 scp monitor-deploy.tar.gz usuario@IP-DO-SERVIDOR:~
 ```
-
-No servidor:
 
 ```bash
 mkdir -p ~/monitor && tar -xzf ~/monitor-deploy.tar.gz -C ~/monitor && cd ~/monitor
 cp .env.exemplo .env
 nano .env
 ```
+
+### Configurar o `.env`
 
 No `.env`, ajuste:
 
@@ -90,12 +128,14 @@ docker compose start monitor && rm monitor.db
 
 ## 6. Atualizar para uma nova versão
 
-Gere um novo pacote com `empacotar.bat`, envie com `scp` e, no servidor:
+No Windows, envie as mudanças para o GitHub (`git add -A`, `git commit -m "..."`, `git push`). No servidor:
 
 ```bash
-cd ~/monitor && tar -xzf ~/monitor-deploy.tar.gz -C ~/monitor
-docker compose up -d --build
+cd ~/monitor && git pull && docker compose up -d --build
 ```
+
+Se usou a opção B (pacote), gere um novo com `empacotar.bat`, envie com `scp` e rode
+`tar -xzf ~/monitor-deploy.tar.gz -C ~/monitor && docker compose up -d --build`.
 
 O `.env` e o banco são preservados. Se a nova versão mudar as regras de agrupamento, o banco é
 reagrupado sozinho na inicialização, com cópia de segurança em `/dados/monitor.vN.bak`.
@@ -127,7 +167,8 @@ Para fazer isso todo dia às 3h, rode `crontab -e` e acrescente (ajuste o caminh
 ## 9. Segurança (checklist)
 
 - [ ] Senha forte no `.env` (o painel inteiro pede login; só `/api/saude` fica aberto).
-- [ ] O `.env` nunca vai para o Git nem para o pacote (`empacotar.bat` já o deixa de fora).
+- [ ] O `.env` nunca vai para o Git nem para o pacote (`.gitignore` e `empacotar.bat` já o deixam de fora).
+- [ ] A deploy key do servidor é só de leitura; se o servidor for desativado, remova-a em Settings → Deploy keys.
 - [ ] Firewall com apenas 22, 80 e 443.
 - [ ] SSH com chave, de preferência sem senha: `PasswordAuthentication no` em `/etc/ssh/sshd_config`.
 - [ ] Atualizações automáticas do Ubuntu: `sudo apt install unattended-upgrades`.
