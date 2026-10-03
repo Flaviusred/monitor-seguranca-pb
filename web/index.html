@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor Segurança PB</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#fff; --surface-2:#f0f3f8; --border:#e2e7ef;
+  --text:#1b2433; --muted:#64708a; --primary:#1f6feb; --primary-soft:#e6efff;
+  --g1:#2a9d8f; --g2:#e9b949; --g3:#f08a3c; --g4:#d64545;
+  --h1:#fde7cf; --h2:#fbbf86; --h3:#f4914f; --h4:#e0612f; --h5:#b8391b; --h0:#f0f3f8;
+  --live:#d64545; --shadow:0 1px 2px rgba(16,24,40,.05),0 2px 8px rgba(16,24,40,.04);
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141c; --surface:#171e29; --surface-2:#1e2733; --border:#2a3442;
+    --text:#e6ebf2; --muted:#93a0b4; --primary:#5b9bff; --primary-soft:#1b2a44;
+    --h1:#4a2a1c; --h2:#7a3a1f; --h3:#b04d22; --h4:#e0672f; --h5:#ff9a5c; --h0:#1e2733;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --surface:#171e29; --surface-2:#1e2733; --border:#2a3442;
+  --text:#e6ebf2; --muted:#93a0b4; --primary:#5b9bff; --primary-soft:#1b2a44;
+  --h1:#4a2a1c; --h2:#7a3a1f; --h3:#b04d22; --h4:#e0672f; --h5:#ff9a5c; --h0:#1e2733;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--primary)}
+.wrap{max-width:1400px;margin:0 auto;padding:0 16px 32px}
+
+header{position:sticky;top:0;z-index:1000;background:var(--surface);border-bottom:1px solid var(--border)}
+.hbar{max-width:1400px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;flex:none}
+.htitle h1{font-size:16px;margin:0}
+.htitle small{color:var(--muted)}
+.spacer{flex:1}
+.live{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.6s infinite}
+.off .dot{background:var(--muted);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(214,69,69,.6)}70%{box-shadow:0 0 0 8px rgba(214,69,69,0)}100%{box-shadow:0 0 0 0 rgba(214,69,69,0)}}
+.iconbtn{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+.iconbtn:hover{background:var(--surface-2)}
+.iconbtn:disabled{opacity:.5;cursor:wait}
+.status{max-width:1400px;margin:0 auto;padding:6px 16px 8px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px}
+.status b{color:var(--text);font-weight:600}
+.warn{color:var(--g4)}
+
+.filters{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:16px 0;box-shadow:var(--shadow)}
+.frow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);outline:none}
+.field input:focus,.field select:focus{border-color:var(--primary)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;align-items:center}
+.chips .lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+.chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;user-select:none}
+.chip:hover{background:var(--surface-2)}
+.chip.on{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600}
+.toggles{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;align-items:center}
+.tg{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.tg input{accent-color:var(--primary);width:16px;height:16px}
+.clear{margin-left:auto;color:var(--primary);background:none;border:none;cursor:pointer;font-weight:600}
+.ftop{display:flex;gap:8px;align-items:flex-end}
+.ftop .field{flex:1}
+.ftoggle,.show-sm{display:none}
+
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.kpi .k{font-size:12px;color:var(--muted);font-weight:500}
+.kpi .v{font-size:26px;font-weight:700;margin-top:2px}
+.kpi .d{font-size:12px;margin-top:2px;color:var(--muted)}
+.up{color:var(--g4)!important} .down{color:var(--g1)!important}
+.kpi-nota{grid-column:1/-1;font-size:12px;color:var(--muted);margin-top:-4px}
+.b-des{background:var(--surface-2);color:var(--muted);border:1px dashed var(--border)}
+
+.grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.card h2{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.card h2 .sub{color:var(--muted);font-weight:400;font-size:12px;margin-left:auto}
+#map{height:460px}
+.charts{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:16px;margin-top:16px}
+.cbody{padding:12px;height:270px;position:relative}
+.legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)}
+.legend i{display:inline-block;width:22px;height:10px;border-radius:2px}
+
+.feed{overflow-y:auto;max-height:460px}
+.item{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.item:hover{background:var(--surface-2)}
+.item.new{animation:flash 3s}
+@keyframes flash{0%{background:var(--primary-soft)}100%{background:transparent}}
+.sev{width:4px;border-radius:4px;flex:none}
+.item .t{font-weight:600;font-size:13px}
+.meta{color:var(--muted);font-size:12px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.b-of{background:rgba(42,157,143,.15);color:var(--g1)}
+.b-rep{background:rgba(214,69,69,.13);color:var(--g4)}
+.b-n{background:var(--surface-2);color:var(--muted)}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+
+.rank{padding:6px 14px 12px}
+.rrow{display:grid;grid-template-columns:22px 1fr 44px;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px}
+.rrow:hover .rn{color:var(--primary)}
+.bar{height:6px;border-radius:6px;background:var(--surface-2);margin-top:4px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--primary)}
+.rpos{color:var(--muted);font-weight:600}
+.rv{text-align:right;font-weight:600}
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+
+.modal{position:fixed;inset:0;background:rgba(10,15,25,.5);display:none;align-items:center;justify-content:center;z-index:2000;padding:16px}
+.modal.open{display:flex}
+.mbox{background:var(--surface);border-radius:var(--radius);max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:20px;border:1px solid var(--border)}
+.mbox h3{margin:8px 0 8px;font-size:18px}
+.mbox p{color:var(--muted);margin:0 0 8px}
+.dl{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;font-size:13px;margin:14px 0}
+.dl dt{color:var(--muted)}
+.dl dd{margin:0;font-weight:500}
+.srcs{list-style:none;padding:0;margin:0 0 14px;border:1px solid var(--border);border-radius:10px}
+.srcs li{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px}
+.srcs li:last-child{border-bottom:none}
+.srcs small{display:block;color:var(--muted)}
+.mact{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.btn{border:none;background:var(--primary);color:#fff;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer}
+.btn.sec{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.toasts{position:fixed;right:16px;bottom:16px;z-index:2100;display:flex;flex-direction:column;gap:8px;max-width:340px}
+.toast{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--g4);border-radius:10px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:13px;cursor:pointer;animation:tin .3s}
+.toast b{display:block;font-size:11px;text-transform:uppercase;margin-bottom:2px}
+@keyframes tin{from{transform:translateY(10px);opacity:0}}
+.offline{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin:16px 0;display:none}
+.offline code{background:var(--surface-2);padding:2px 6px;border-radius:6px}
+.leaflet-container{background:var(--surface);font:inherit}
+.leaflet-control-attribution{background:transparent!important;color:var(--muted)!important}
+.leaflet-tooltip{font:12px Inter,system-ui,sans-serif}
+
+@media (max-width:1100px){
+  .frow{grid-template-columns:1fr 1fr}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .grid,.charts,.bottom{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .htitle small,.hide-sm{display:none}
+  .show-sm{display:inline}
+  .hbar{gap:8px}
+  .htitle h1{font-size:15px;line-height:1.2}
+  .live{white-space:nowrap;padding:6px 8px}
+  .card h2 .sub{display:none}
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi .v{font-size:22px}
+  .ftoggle{display:inline-flex}
+  .filters .fpanel{display:none}
+  .filters.open .fpanel{display:block}
+  .filters{padding:10px}
+  #map{height:340px}
+  .dl{grid-template-columns:1fr}
+}
+/* Relatório (abre no lugar do painel; sempre em fundo claro, pronto para impressão) */
+#relatorio{display:none;background:#fff;color:#1b2433;min-height:100vh;font:12px/1.45 Inter,system-ui,sans-serif}
+body.modo-rel{background:#fff}
+body.modo-rel>header,body.modo-rel>.wrap,body.modo-rel .toasts,body.modo-rel .modal{display:none!important}
+body.modo-rel #relatorio{display:block}
+#relatorio .pag{max-width:900px;margin:0 auto;padding:28px 24px}
+#relatorio h1{font-size:20px;margin:0 0 4px}
+#relatorio h2{font-size:15px;margin:26px 0 8px;padding-bottom:4px;border-bottom:2px solid #1f6feb}
+#relatorio h3{font-size:13px;margin:16px 0 6px}
+#relatorio .sub{color:#64708a}
+#relatorio .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+#relatorio .kp div{border:1px solid #e2e7ef;border-radius:8px;padding:10px}
+#relatorio .kp b{display:block;font-size:22px}
+#relatorio .kp span{color:#64708a}
+#relatorio table{width:100%;border-collapse:collapse;margin:4px 0 8px}
+#relatorio th,#relatorio td{border:1px solid #e2e7ef;padding:5px 7px;text-align:left;vertical-align:top}
+#relatorio th{background:#f0f3f8;font-weight:600}
+#relatorio tr{page-break-inside:avoid}
+#relatorio a{color:#1f6feb;text-decoration:none}
+#relatorio .vazio{color:#64708a;font-style:italic}
+#relatorio .nota{background:#f6f8fb;border:1px solid #e2e7ef;border-radius:8px;padding:10px 12px;color:#3a4558}
+#relatorio .barra{position:sticky;top:0;background:#1f6feb;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:5}
+#relatorio .barra button{background:#fff;color:#1f6feb;border:none;border-radius:6px;padding:7px 14px;font-weight:600;cursor:pointer}
+#relatorio .duas{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:640px){#relatorio .kp,#relatorio .duas{grid-template-columns:1fr 1fr}#relatorio .duas{grid-template-columns:1fr}
+  #relatorio table{font-size:11px}#relatorio .pag{padding:16px}}
+@media print{#relatorio .barra{display:none}#relatorio .pag{padding:0;max-width:none}#relatorio h2{page-break-after:avoid}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hbar">
+    <div class="logo">PB</div>
+    <div class="htitle"><h1><span class="hide-sm">Monitor de Segurança Pública · Paraíba</span><span class="show-sm">Segurança Pública PB</span></h1><small>Notícias de portais, blogs e órgãos oficiais</small></div>
+    <div class="spacer"></div>
+    <div class="live off" id="live" title="Conexão em tempo real com o servidor"><span class="dot"></span><span id="liveTxt">CONECTANDO</span></div>
+    <button class="iconbtn" id="refresh" title="Coletar agora">↻ <span class="hide-sm">Atualizar</span></button>
+    <button class="iconbtn" id="relBtn" title="Gerar relatório de um período">▤ <span class="hide-sm">Relatório</span></button>
+    <button class="iconbtn" id="csv" title="Exportar CSV">⬇ <span class="hide-sm">CSV</span></button>
+    <button class="iconbtn" id="theme" title="Alternar tema">◐</button>
+  </div>
+  <div class="status" id="status">Carregando…</div>
+</header>
+
+<div class="wrap">
+  <div class="offline" id="offline">
+    <h2 style="margin-top:0">Servidor não encontrado</h2>
+    <p>Este painel precisa do servidor de coleta rodando. Na pasta <code>monitor-seguranca-pb</code>, dê dois cliques em <code>iniciar.bat</code> e abra <code>http://localhost:8000</code>.</p>
+  </div>
+
+  <section class="filters" id="filters">
+    <div class="ftop">
+      <div class="field"><label for="q">Buscar</label><input id="q" placeholder="Palavra-chave, bairro, fonte… (ex.: “facção”, “Mangabeira”)"></div>
+      <button class="iconbtn ftoggle" id="ftoggle">Filtros</button>
+    </div>
+    <div class="fpanel">
+      <div class="frow" style="margin-top:10px">
+        <div class="field"><label for="periodo">Período</label>
+          <select id="periodo"><option value="1">Últimas 24 h</option><option value="3">Últimos 3 dias</option><option value="7" selected>Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select></div>
+        <div class="field"><label for="regiao">Mesorregião</label><select id="regiao"></select></div>
+        <div class="field"><label for="cidade">Município</label><select id="cidade"></select></div>
+        <div class="field"><label for="grav">Gravidade mínima</label>
+          <select id="grav"><option value="1">Todas</option><option value="2">Média ou mais</option><option value="3">Alta ou mais</option><option value="4">Somente crítica</option></select></div>
+        <div class="field"><label for="sort">Ordenar feed</label>
+          <select id="sort"><option value="rec">Mais recentes</option><option value="rep">Maior repercussão</option><option value="grav">Maior gravidade</option></select></div>
+      </div>
+      <div class="chips" id="tipos"><span class="lbl">Tipo de crime</span></div>
+      <div class="chips" id="fontes"><span class="lbl">Fonte</span></div>
+      <div class="toggles">
+        <label class="tg"><input type="checkbox" id="rep"> Só alta repercussão</label>
+        <label class="tg"><input type="checkbox" id="ofi"> Só com fonte oficial</label>
+        <label class="tg"><input type="checkbox" id="cvli"> Só CVLI (crimes letais)</label>
+        <label class="tg"><input type="checkbox" id="semcid"> Incluir sem município identificado</label>
+        <label class="tg" title="Prisões e investigações de casos anteriores, condenações, julgamentos e retrospectivas. Nunca entram nos números."><input type="checkbox" id="desd"> Mostrar desdobramentos no feed</label>
+        <button class="clear" id="clear">Limpar filtros</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Mapa de ocorrências <span class="sub">clique num município para filtrar</span></h2>
+      <div id="map"></div>
+      <div class="legend">Ocorrências no período: <span>menos</span><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><i style="background:var(--h5)"></i><span>mais</span></div>
+    </div>
+    <div class="card">
+      <h2>Feed em tempo real <span class="sub" id="feedCount"></span></h2>
+      <div class="feed" id="feed"></div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="card"><h2>Evolução no período <span class="sub">por gravidade</span></h2><div class="cbody"><canvas id="cTime"></canvas></div></div>
+    <div class="card"><h2>Por tipo de crime <span class="sub">clique para filtrar</span></h2><div class="cbody"><canvas id="cTipo"></canvas></div></div>
+    <div class="card"><h2>Por mesorregião <span class="sub">clique para filtrar</span></h2><div class="cbody"><canvas id="cReg"></canvas></div></div>
+  </section>
+
+  <section class="bottom">
+    <div class="card"><h2>Municípios com mais ocorrências</h2><div class="rank" id="rankCid"></div></div>
+    <div class="card"><h2>Termos em alta nas manchetes <span class="sub">clique para buscar</span></h2><div class="rank" id="rankTerm"></div></div>
+  </section>
+</div>
+
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="toasts" id="toasts"></div>
+<div id="relatorio"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const REGIOES=['Mata Paraibana','Agreste Paraibano','Borborema','Sertão Paraibano'];
+const TIPOS=['Homicídio','Feminicídio','Latrocínio','Tentativa de homicídio','Crime sexual','Violência doméstica','Roubo','Furto',
+  'Tráfico de drogas','Ataque a banco','Apreensão de armas','Operação policial'];
+const FONTES=['Portal oficial','Portal de notícias','Blog','Rede social'];
+const SEV=[null,{n:'Baixa',v:'--g1'},{n:'Média',v:'--g2'},{n:'Alta',v:'--g3'},{n:'Crítica',v:'--g4'}];
+const $=id=>document.getElementById(id);
+const cssv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const norm=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||'')?u:'#';
+const DIA=864e5;
+const NAT_ROTULO={'prisão/investigação':'Prisão/investigação','condenação/julgamento':'Condenação/julgamento','resumo/retrospectiva':'Resumo/retrospectiva'};
+
+let MUN=[], MUN_ID={}, DATA=[], novos=new Set();
+
+/* ---------- Filtros ---------- */
+const F={q:'',periodo:7,regiao:'',cidade:'',grav:1,sort:'rec',tipos:new Set(),fontes:new Set(),rep:false,ofi:false,cvli:false,semcid:true,desd:false};
+
+function filtrar(offsetPeriodos=0){
+  const fim=Date.now()-offsetPeriodos*F.periodo*DIA, ini=fim-F.periodo*DIA;
+  return DATA.filter(e=>e.primeiro_em>ini&&e.primeiro_em<=fim&&passaFiltros(e));
+}
+// critérios do painel, sem o período (o relatório usa as próprias datas)
+function passaFiltros(e){
+  const q=norm(F.q);
+  return (F.semcid||e.cidade)
+    &&(!F.regiao||e.regiao===F.regiao)&&(!F.cidade||e.cidade===F.cidade)
+    &&e.gravidade>=F.grav&&(!F.tipos.size||F.tipos.has(e.tipo))
+    &&(!F.fontes.size||e.noticias.some(n=>F.fontes.has(n.fonte_tipo)))
+    &&(!F.rep||e.repercussao>=70)&&(!F.ofi||e.oficial)&&(!F.cvli||e.cvli)
+    &&(!q||e._busca.includes(q));
+}
+function preparar(e){
+  e._busca=norm([e.titulo,e.resumo,e.cidade,e.bairro,e.tipo,...e.noticias.map(n=>n.fonte+' '+n.titulo)].join(' '));
+  return e;
+}
+
+function montarFiltros(){
+  $('regiao').innerHTML='<option value="">Todas</option>'+REGIOES.map(r=>`<option>${r}</option>`).join('');
+  montarCidades();
+  $('tipos').insertAdjacentHTML('beforeend',TIPOS.map(t=>`<span class="chip" data-t="${t}">${t}</span>`).join(''));
+  $('fontes').insertAdjacentHTML('beforeend',FONTES.map(f=>`<span class="chip" data-f="${f}">${f}</span>`).join(''));
+  $('tipos').onclick=e=>{const t=e.target.dataset.t;if(t){toggleSet(F.tipos,t);render()}};
+  $('fontes').onclick=e=>{const f=e.target.dataset.f;if(f){toggleSet(F.fontes,f);render()}};
+  let deb;$('q').oninput=e=>{clearTimeout(deb);deb=setTimeout(()=>{F.q=e.target.value;render()},200)};
+  $('periodo').onchange=e=>{F.periodo=+e.target.value;render()};
+  $('regiao').onchange=e=>{F.regiao=e.target.value;F.cidade='';render()};
+  $('cidade').onchange=e=>{F.cidade=e.target.value;if(F.cidade)F.regiao=MUN.find(m=>m.nome===F.cidade).mesorregiao;render()};
+  $('grav').onchange=e=>{F.grav=+e.target.value;render()};
+  $('sort').onchange=e=>{F.sort=e.target.value;render()};
+  ['rep','ofi','cvli','semcid','desd'].forEach(k=>$(k).onchange=e=>{F[k]=e.target.checked;render()});
+  $('clear').onclick=()=>{Object.assign(F,{q:'',periodo:7,regiao:'',cidade:'',grav:1,sort:'rec',rep:false,ofi:false,cvli:false,semcid:true,desd:false});F.tipos.clear();F.fontes.clear();render()};
+  $('ftoggle').onclick=()=>$('filters').classList.toggle('open');
+}
+function montarCidades(){
+  const cs=MUN.filter(m=>!F.regiao||m.mesorregiao===F.regiao).map(m=>m.nome).sort((a,b)=>a.localeCompare(b,'pt'));
+  $('cidade').innerHTML='<option value="">Todos</option>'+cs.map(c=>`<option ${c===F.cidade?'selected':''}>${esc(c)}</option>`).join('');
+}
+const toggleSet=(s,v)=>s.has(v)?s.delete(v):s.add(v);
+function syncUI(){
+  $('q').value!==F.q&&($('q').value=F.q);
+  $('periodo').value=F.periodo;$('regiao').value=F.regiao;montarCidades();$('grav').value=F.grav;$('sort').value=F.sort;
+  ['rep','ofi','cvli','semcid','desd'].forEach(k=>$(k).checked=F[k]);
+  document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',F.tipos.has(x.dataset.t)));
+  document.querySelectorAll('[data-f]').forEach(x=>x.classList.toggle('on',F.fontes.has(x.dataset.f)));
+  const n=[F.q,F.regiao,F.cidade,F.grav>1,F.rep,F.ofi,F.cvli,!F.semcid].filter(Boolean).length+F.tipos.size+F.fontes.size;
+  $('ftoggle').textContent=n?`Filtros (${n})`:'Filtros';
+}
+
+/* ---------- KPIs ---------- */
+function kpis(L,nDesd){
+  const P=crimes(filtrar(1));
+  const k=[['Crimes noticiados',x=>x],['CVLI (crimes letais)',x=>x.filter(e=>e.cvli)],
+           ['Alta repercussão',x=>x.filter(e=>e.repercussao>=70)],['Gravidade crítica',x=>x.filter(e=>e.gravidade===4)]];
+  const pct=L.length?Math.round(L.filter(e=>e.oficial).length/L.length*100):0;
+  $('kpis').innerHTML=k.map(([n,f])=>{const v=f(L).length,p=f(P).length,d=p?Math.round((v-p)/p*100):null;
+    return `<div class="kpi"><div class="k">${n}</div><div class="v">${v.toLocaleString('pt-BR')}</div>`+
+      (d===null?'<div class="d">sem base de comparação</div>':`<div class="d ${d>0?'up':d<0?'down':''}">${d>0?'▲':d<0?'▼':'='} ${Math.abs(d)}% vs período anterior</div>`)+'</div>'}).join('')
+   +`<div class="kpi"><div class="k">Com fonte oficial</div><div class="v">${pct}%</div><div class="d">dos crimes do período</div></div>`
+   +`<div class="kpi-nota">Contam só crimes que aconteceram no período, cada um uma vez, mesmo noticiado por vários veículos.${nDesd?` ${nDesd} notícia${nDesd>1?'s':''} sobre casos anteriores (prisões, condenações, julgamentos) ficam fora dos números — ative “Mostrar desdobramentos” ou gere um relatório para vê-las.`:''}</div>`;
+}
+
+/* ---------- Feed ---------- */
+const rel=ts=>{const m=Math.round((Date.now()-ts)/6e4);if(m<1)return'agora';if(m<60)return`há ${m} min`;const h=Math.round(m/60);if(h<24)return`há ${h} h`;return`há ${Math.round(h/24)} d`};
+function feed(L){
+  if(!F.desd)L=crimes(L);
+  const ord={rep:(a,b)=>b.repercussao-a.repercussao||b.primeiro_em-a.primeiro_em,grav:(a,b)=>b.gravidade-a.gravidade||b.primeiro_em-a.primeiro_em,rec:(a,b)=>b.primeiro_em-a.primeiro_em}[F.sort];
+  const S=[...L].sort(ord).slice(0,100);
+  $('feedCount').textContent=F.desd?`${L.length} fatos`:`${L.length} crimes`;
+  $('feed').innerHTML=S.length?S.map(e=>`<div class="item ${novos.has(e.id)?'new':''}" data-id="${e.id}">
+    <div class="sev" style="background:var(${SEV[e.gravidade].v})"></div>
+    <div><div class="t">${esc(e.titulo)}</div>
+    <div class="meta"><span>${esc(e.cidade||'Município não identificado')}</span>·<span>${esc(e.tipo)}</span>·<span>${esc(e.noticias[0]?.fonte)}</span>·<span>${rel(e.primeiro_em)}</span>
+    ${e.desdobramento?`<span class="badge b-des" title="Caso anterior: não entra nas contagens">${NAT_ROTULO[e.natureza]||'Desdobramento'}</span>`:''}${e.n_fontes>1?`<span class="badge b-n">${e.n_fontes} fontes</span>`:''}${e.oficial?'<span class="badge b-of">Oficial</span>':''}${e.repercussao>=70?'<span class="badge b-rep">Repercussão</span>':''}</div></div></div>`).join('')
+    :'<div class="empty">Nenhum crime com esses filtros.</div>';
+  novos.clear();
+}
+$('feed').onclick=e=>{const it=e.target.closest('.item');if(it)abrir(+it.dataset.id)};
+
+/* ---------- Mapa (coroplético por município) ---------- */
+// Sem mapa de fundo: a malha municipal do IBGE já desenha o estado e dispensa serviços de terceiros
+const map=L.map('map',{scrollWheelZoom:false,zoomSnap:.25,maxZoom:11,minZoom:6});
+map.attributionControl.setPrefix(false).addAttribution('Malha municipal: IBGE');
+let geo=null, contagem={};
+function corPara(n,max){if(!n)return cssv('--h0');const r=Math.log(n+1)/Math.log(max+1);return cssv(['--h1','--h2','--h3','--h4','--h5'][Math.min(4,Math.floor(r*5))])}
+function mapa(L_){
+  contagem={};L_.forEach(e=>{if(!e.cidade)return;const c=contagem[e.cidade]??={n:0,cvli:0};c.n++;if(e.cvli)c.cvli++});
+  if(!geo)return;
+  const max=Math.max(1,...Object.values(contagem).map(c=>c.n));
+  geo.eachLayer(l=>{const m=MUN_ID[l.feature.properties.id],c=contagem[m?.nome];
+    const sel=F.cidade&&m?.nome===F.cidade;
+    l.setStyle({fillColor:corPara(c?.n,max),fillOpacity:1,color:sel?cssv('--primary'):cssv('--border'),weight:sel?2.5:.6});
+    if(sel)l.bringToFront();
+    l.setTooltipContent(`<b>${esc(m?.nome)}</b><br>${c?`${c.n} ocorrência${c.n>1?'s':''} · ${c.cvli} CVLI`:'Sem ocorrências no período'}`)});
+}
+async function carregarMalha(){
+  const gj=await fetch('municipios_pb.geojson').then(r=>r.json());
+  geo=L.geoJSON(gj,{style:{weight:.6},onEachFeature:(f,l)=>{l.bindTooltip('',{sticky:true});
+    l.on('click',()=>{const m=MUN_ID[f.properties.id];if(!m)return;F.cidade=F.cidade===m.nome?'':m.nome;if(F.cidade)F.regiao=m.mesorregiao;render()})}}).addTo(map);
+  map.fitBounds(geo.getBounds(),{padding:[8,8]});
+  let t;new ResizeObserver(()=>{clearTimeout(t);t=setTimeout(()=>{map.invalidateSize();map.fitBounds(geo.getBounds(),{padding:[8,8]})},150)}).observe($('map'));
+}
+
+/* ---------- Gráficos ---------- */
+let cT,cTi,cR;
+function graficos(L_){
+  Chart.defaults.color=cssv('--muted');Chart.defaults.font.family='Inter, system-ui';Chart.defaults.borderColor=cssv('--border');
+  const horas=F.periodo===1,n=horas?24:F.periodo,step=horas?36e5:DIA,base=Date.now()-n*step;
+  const labels=[...Array(n)].map((_,i)=>{const d=new Date(base+(i+1)*step);return horas?d.getHours()+'h':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})});
+  const ds=[1,2,3,4].map(g=>({label:SEV[g].n,backgroundColor:cssv(SEV[g].v),data:Array(n).fill(0),borderRadius:3}));
+  L_.forEach(e=>{const i=Math.min(n-1,Math.floor((e.primeiro_em-base)/step));if(i>=0)ds[e.gravidade-1].data[i]++});
+  cT?.destroy();cT=new Chart($('cTime'),{type:'bar',data:{labels,datasets:ds},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+
+  const ct={};L_.forEach(e=>ct[e.tipo]=(ct[e.tipo]||0)+1);
+  const tl=Object.keys(ct).sort((a,b)=>ct[b]-ct[a]);
+  cTi?.destroy();cTi=new Chart($('cTipo'),{type:'bar',data:{labels:tl,datasets:[{data:tl.map(t=>ct[t]),backgroundColor:tl.map(t=>!F.tipos.size||F.tipos.has(t)?cssv('--primary'):cssv('--border')),borderRadius:4}]},
+    options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}},y:{grid:{display:false}}},
+    onClick:(_,el)=>{if(el[0]){toggleSet(F.tipos,tl[el[0].index]);render()}}}});
+
+  const cr=REGIOES.map(r=>L_.filter(e=>e.regiao===r).length);
+  cR?.destroy();cR=new Chart($('cReg'),{type:'bar',data:{labels:['Mata','Agreste','Borborema','Sertão'],datasets:[{data:cr,backgroundColor:REGIOES.map(r=>!F.regiao||F.regiao===r?cssv('--primary'):cssv('--border')),borderRadius:6}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}},
+    onClick:(_,el)=>{if(el[0]){const r=REGIOES[el[0].index];F.regiao=F.regiao===r?'':r;F.cidade='';render()}}}});
+}
+
+/* ---------- Rankings ---------- */
+const STOP=new Set('para apos durante contra sobre entre pela pelo pelos pelas mais anos homem mulher jovem preso presa presos policia paraiba suspeito suspeita apos video tem sao ser foi esta estao como onde quando'.split(' '));
+function rankings(L_){
+  const top=Object.entries(contagem).map(([n,c])=>[n,c.n]).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=top[0]?.[1]||1;
+  $('rankCid').innerHTML=top.map(([n,v],i)=>`<div class="rrow" data-c="${esc(n)}"><span class="rpos">${i+1}</span><div><span class="rn">${esc(n)}</span><div class="bar"><span style="width:${v/mx*100}%"></span></div></div><span class="rv">${v}</span></div>`).join('')||'<div class="empty">Sem dados</div>';
+  const cid=new Set(MUN.flatMap(m=>norm(m.nome).split(/\s+/)));
+  const w={};L_.forEach(e=>new Set(norm(e.titulo).split(/[^a-z]+/)).forEach(t=>{if(t.length>3&&!STOP.has(t)&&!cid.has(t))w[t]=(w[t]||0)+1}));
+  const tw=Object.entries(w).sort((a,b)=>b[1]-a[1]).slice(0,8),mw=tw[0]?.[1]||1;
+  $('rankTerm').innerHTML=tw.map(([n,v],i)=>`<div class="rrow" data-q="${esc(n)}"><span class="rpos">${i+1}</span><div><span class="rn">${esc(n)}</span><div class="bar"><span style="width:${v/mw*100}%;background:var(--g3)"></span></div></div><span class="rv">${v}</span></div>`).join('')||'<div class="empty">Sem dados</div>';
+}
+$('rankCid').onclick=e=>{const r=e.target.closest('[data-c]');if(r){F.cidade=r.dataset.c;F.regiao=MUN.find(m=>m.nome===F.cidade)?.mesorregiao||'';render()}};
+$('rankTerm').onclick=e=>{const r=e.target.closest('[data-q]');if(r){F.q=r.dataset.q;render()}};
+
+/* ---------- Detalhe ---------- */
+// mesma manchete do mesmo veículo aparece uma vez só
+const unicas=ns=>{const v=new Set();return ns.filter(n=>{const k=n.fonte+'|'+norm(n.titulo);return v.has(k)?false:v.add(k)})};
+function abrir(id){
+  const e=DATA.find(x=>x.id===id);if(!e)return;
+  $('mbox').innerHTML=`<span class="badge" style="background:var(${SEV[e.gravidade].v});color:#fff">Gravidade ${SEV[e.gravidade].n}</span>
+   ${e.oficial?'<span class="badge b-of">Fonte oficial</span>':''} ${e.repercussao>=70?'<span class="badge b-rep">Alta repercussão</span>':''}
+   <h3>${esc(e.titulo)}</h3>${e.resumo?`<p>${esc(e.resumo)}</p>`:''}
+   <dl class="dl"><dt>Primeira notícia</dt><dd>${new Date(e.primeiro_em).toLocaleString('pt-BR')}</dd>
+   <dt>Local</dt><dd>${esc([e.bairro,e.cidade||'Município não identificado',e.regiao].filter(Boolean).join(' · '))}</dd>
+   <dt>Tipo</dt><dd>${esc(e.tipo)}${e.cvli?' (CVLI)':''}${e.desdobramento?` — ${(NAT_ROTULO[e.natureza]||'desdobramento').toLowerCase()} de caso anterior: não entra nas contagens`:''}</dd>
+   <dt>Repercussão</dt><dd>${e.repercussao}/100 · ${e.n_fontes} fonte${e.n_fontes>1?'s':''}</dd>
+   <dt>Classificação</dt><dd>${e.classificador==='claude'?'Inteligência artificial':'Regras automáticas'} — confira na fonte</dd></dl>
+   <ul class="srcs">${unicas(e.noticias).map(n=>`<li><a href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener noreferrer">${esc(n.titulo)}</a><small>${esc(n.fonte)} · ${esc(n.fonte_tipo)} · ${new Date(n.publicado_em).toLocaleString('pt-BR')}${NAT_ROTULO[n.natureza]?' · '+NAT_ROTULO[n.natureza]:''}</small></li>`).join('')}</ul>
+   <div class="mact"><button class="btn sec" id="mc">Fechar</button>${e.cidade?`<button class="btn" id="mf">Ver ocorrências em ${esc(e.cidade)}</button>`:''}</div>`;
+  $('modal').classList.add('open');
+  $('mc').onclick=fechar;
+  if(e.cidade)$('mf').onclick=()=>{F.cidade=e.cidade;F.regiao=e.regiao;render();fechar()};
+}
+const fechar=()=>$('modal').classList.remove('open');
+$('modal').onclick=e=>{if(e.target.id==='modal')fechar()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fechar()});
+
+/* ---------- Render ---------- */
+// O feed mostra tudo; indicadores, mapa, gráficos e rankings contam só crimes (sem desdobramentos:
+// prisões e investigações de casos anteriores), para o mesmo crime não ser contado duas vezes
+const crimes=L=>L.filter(e=>!e.desdobramento);
+function render(){const L_=filtrar(),C_=crimes(L_);syncUI();kpis(C_,L_.length-C_.length);feed(L_);mapa(C_);graficos(C_);rankings(C_)}
+
+/* ---------- Servidor: status, carga inicial e tempo real ---------- */
+async function status(){
+  try{
+    const s=await fetch('/api/status').then(r=>r.json());
+    const fs=Object.entries(s.fontes),ok=fs.filter(([,f])=>f.ok).length,falhas=fs.filter(([,f])=>!f.ok).map(([n])=>n);
+    $('status').innerHTML=`<span>Última coleta: <b>${s.ultima_coleta?new Date(s.ultima_coleta).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'em andamento…'}</b></span>`+
+      `<span>Fontes ativas: <b>${ok}/${fs.length}</b>${falhas.length?` <span class="warn" title="${esc(falhas.join(', '))}">(${falhas.length} com falha)</span>`:''}</span>`+
+      `<span>Coleta a cada <b>${s.intervalo_min} min</b></span>`+
+      `<span>Classificação: <b>${s.classificador==='claude'?'IA (Claude)':'regras automáticas'}</b></span>`;
+  }catch{}
+}
+function toast(e){
+  const t=document.createElement('div');t.className='toast';t.style.borderLeftColor=`var(${SEV[e.gravidade].v})`;
+  t.innerHTML=`<b style="color:var(${SEV[e.gravidade].v})">${e.cvli?'CVLI · ':''}${SEV[e.gravidade].n} · ${esc(e.cidade||'PB')}</b>${esc(e.titulo)}`;
+  t.onclick=()=>{abrir(e.id);t.remove()};$('toasts').prepend(t);setTimeout(()=>t.remove(),9000);
+}
+function conectar(){
+  const es=new EventSource('/api/stream');
+  es.onopen=()=>{$('live').classList.remove('off');$('liveTxt').textContent='AO VIVO'};
+  es.onerror=()=>{$('live').classList.add('off');$('liveTxt').textContent='RECONECTANDO'};
+  es.addEventListener('eventos',m=>{
+    const {eventos,removidos}=JSON.parse(m.data);
+    // fatos que o servidor uniu a outro (mesmo caso) saem da lista para não contar duas vezes
+    if(removidos.length){const r=new Set(removidos);DATA=DATA.filter(e=>!r.has(e.id))}
+    for(const e of eventos){
+      preparar(e);const i=DATA.findIndex(x=>x.id===e.id);
+      if(i>=0)DATA[i]=e;else{DATA.unshift(e);if(!e.desdobramento&&(e.gravidade>=3||e.repercussao>=70))toast(e)}
+      novos.add(e.id);
+    }
+    render();status();
+  });
+}
+async function iniciar(){
+  montarFiltros();
+  try{
+    [MUN,DATA]=await Promise.all([fetch('/api/municipios').then(r=>r.json()),fetch('/api/eventos?dias=60').then(r=>r.json())]);
+  }catch{
+    $('offline').style.display='block';$('status').textContent='Servidor indisponível';$('liveTxt').textContent='OFFLINE';return;
+  }
+  MUN.forEach(m=>MUN_ID[m.id]=m);DATA.forEach(preparar);
+  montarCidades();await carregarMalha();render();status();conectar();
+  setInterval(()=>{render();status()},60000);
+}
+
+$('refresh').onclick=async()=>{const b=$('refresh');b.disabled=true;try{await fetch('/api/coletar',{method:'POST'})}finally{b.disabled=false;status()}};
+/* ---------- Exportação CSV ---------- */
+function baixarCsv(lista,nome){
+  const rows=[['data','municipio','mesorregiao','bairro','tipo','natureza','conta_nos_numeros','gravidade','cvli','repercussao','n_fontes','oficial','titulo','fontes','links'],
+    ...lista.map(e=>[new Date(e.primeiro_em).toLocaleString('pt-BR'),e.cidade||'',e.regiao||'',e.bairro||'',e.tipo,e.natureza||'',!e.desdobramento,
+      SEV[e.gravidade].n,e.cvli,e.repercussao,e.n_fontes,e.oficial,e.titulo,
+      unicas(e.noticias).map(n=>n.fonte).join(' | '),unicas(e.noticias).map(n=>n.url).join(' | ')])];
+  // prefixo ' evita que um título vindo da fonte seja interpretado como fórmula no Excel
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/^[=+\-@]/,"'$&").replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));a.download=nome;a.click();
+}
+$('csv').onclick=()=>baixarCsv(F.desd?filtrar():crimes(filtrar()),'ocorrencias-pb.csv');
+
+/* ---------- Relatório de período ---------- */
+const isoDia=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const dataBR=s=>s.split('-').reverse().join('/');
+$('relBtn').onclick=()=>{
+  const hoje=new Date(),ini=new Date(Date.now()-29*DIA);
+  $('mbox').innerHTML=`<h3>Relatório de período</h3>
+   <p>Conta apenas crimes que aconteceram no período (cada caso uma vez). Prisões, condenações e julgamentos de casos anteriores vão em anexo, separados.</p>
+   <div class="frow" style="grid-template-columns:1fr 1fr;margin:14px 0">
+     <div class="field"><label for="rDe">De</label><input type="date" id="rDe" value="${isoDia(ini)}" max="${isoDia(hoje)}"></div>
+     <div class="field"><label for="rAte">Até</label><input type="date" id="rAte" value="${isoDia(hoje)}" max="${isoDia(hoje)}"></div>
+   </div>
+   <label class="tg" style="margin-bottom:8px"><input type="checkbox" id="rFiltros"> Aplicar os filtros do painel (mesorregião, município, tipo, fonte, busca)</label>
+   <label class="tg" style="margin-bottom:16px"><input type="checkbox" id="rAnexo" checked> Incluir anexo de desdobramentos (prisões, condenações, julgamentos)</label>
+   <div class="mact"><button class="btn sec" id="rCancel">Cancelar</button><button class="btn sec" id="rCsv">Baixar CSV</button><button class="btn" id="rGerar">Gerar relatório</button></div>
+   <p id="rMsg" style="margin-top:10px"></p>`;
+  $('modal').classList.add('open');
+  $('rCancel').onclick=fechar;
+  const buscar=async()=>{
+    const de=$('rDe').value,ate=$('rAte').value;
+    if(!de||!ate||de>ate)throw new Error('Confira as datas: a data inicial deve ser anterior à final.');
+    const evs=await fetch(`/api/eventos?inicio=${de}&fim=${ate}`).then(r=>{if(!r.ok)throw new Error('Servidor indisponível.');return r.json()});
+    evs.forEach(preparar);
+    return {de,ate,evs:$('rFiltros').checked?evs.filter(passaFiltros):evs};
+  };
+  $('rCsv').onclick=async()=>{try{const {de,ate,evs}=await buscar();baixarCsv(evs,`relatorio-pb_${de}_a_${ate}.csv`)}catch(e){$('rMsg').textContent=e.message}};
+  $('rGerar').onclick=async()=>{
+    $('rMsg').textContent='Gerando…';
+    try{const r=await buscar();mostrarRelatorio(htmlRelatorio(r.evs,r.de,r.ate,$('rFiltros').checked,$('rAnexo').checked));fechar()}
+    catch(e){$('rMsg').textContent=e.message}
+  };
+};
+
+function htmlRelatorio(evs,de,ate,comFiltros,comAnexo){
+  const C=evs.filter(e=>!e.desdobramento).sort((a,b)=>a.primeiro_em-b.primeiro_em);
+  const D=evs.filter(e=>e.desdobramento).sort((a,b)=>a.primeiro_em-b.primeiro_em);
+  const V=C.filter(e=>e.cvli), pct=(n,t)=>t?(n/t*100).toFixed(1).replace('.',',')+'%':'—';
+  const quando=t=>new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const conta=(lista,chave)=>{const m=new Map();lista.forEach(e=>{const k=chave(e);m.set(k,(m.get(k)||0)+1)});return m};
+  const tabela=(cab,linhas)=>linhas.length?`<table><thead><tr>${cab.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${linhas.map(l=>`<tr>${l.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:'<p class="vazio">Nenhum registro no período.</p>';
+  const fontes=e=>unicas(e.noticias).map(n=>`<a href="${esc(safeUrl(n.url))}">${esc(n.fonte)}</a>`).join(', ');
+
+  const porTipo=[...conta(C,e=>e.tipo)].sort((a,b)=>b[1]-a[1]).map(([t,n])=>[esc(t),n,pct(n,C.length)]);
+  const porReg=[...REGIOES,null].map(r=>{const l=C.filter(e=>(e.regiao||null)===r);return [r||'Município não identificado',l.length,l.filter(e=>e.cvli).length]}).filter(l=>l[1]);
+  const mun=[...conta(C.filter(e=>e.cidade),e=>e.cidade)].sort((a,b)=>b[1]-a[1]).slice(0,15)
+    .map(([m,n])=>[esc(m),n,C.filter(e=>e.cidade===m&&e.cvli).length]);
+  // evolução: por dia até 62 dias; acima disso, por mês
+  const dias=Math.round((new Date(ate)-new Date(de))/DIA)+1, porMes=dias>62;
+  const chaveT=e=>{const d=new Date(e.primeiro_em);return porMes?`${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`:d.toLocaleDateString('pt-BR')};
+  const serie=[];
+  for(let d=new Date(de+'T12:00');d<=new Date(ate+'T12:00');d=new Date(d.getTime()+DIA)){
+    const k=porMes?`${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`:d.toLocaleDateString('pt-BR');
+    if(!serie.includes(k))serie.push(k);
+  }
+  const ct=conta(C,chaveT),cv=conta(V,chaveT);
+  const evol=serie.map(k=>[k,ct.get(k)||0,cv.get(k)||0]);
+  const filtrosTxt=comFiltros?[F.regiao,F.cidade,[...F.tipos].join(', '),[...F.fontes].join(', '),F.q&&`busca “${F.q}”`,F.grav>1&&`gravidade ≥ ${SEV[F.grav].n}`].filter(Boolean).join(' · ')||'nenhum':'nenhum (todo o estado)';
+  const grupos=[['condenação/julgamento','Condenações e julgamentos'],['prisão/investigação','Prisões e investigações de casos anteriores'],['resumo/retrospectiva','Resumos e retrospectivas']];
+
+  return `<div class="barra"><button id="relVoltar">← Voltar ao painel</button><span style="flex:1"></span><button id="relImprimir">Imprimir / salvar PDF</button></div>
+<div class="pag">
+<h1>Relatório de Segurança Pública — Paraíba</h1>
+<div class="sub">Período: <b>${dataBR(de)} a ${dataBR(ate)}</b> (${dias} dia${dias>1?'s':''}) · Filtros: ${esc(filtrosTxt)} · Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+
+<div class="kp">
+ <div><b>${C.length}</b><span>crimes noticiados</span></div>
+ <div><b>${V.length}</b><span>CVLI (mortes violentas)</span></div>
+ <div><b>${C.filter(e=>e.gravidade>=3).length}</b><span>de gravidade alta ou crítica</span></div>
+ <div><b>${new Set(C.filter(e=>e.cidade).map(e=>e.cidade)).size}</b><span>municípios com ocorrências</span></div>
+</div>
+<div class="nota">Números do que <b>aconteceu</b> no período, a partir de notícias de portais, blogs e órgãos oficiais. Cada crime é contado <b>uma vez</b>, mesmo quando noticiado por vários veículos. Prisões, condenações e julgamentos ligados a casos anteriores <b>não</b> entram nos números${comAnexo?' e estão listados no anexo':''}. A data é a da primeira notícia sobre o caso. Classificação automática: confira as fontes antes de uso oficial.</div>
+
+<h2>1. Mortes violentas (CVLI)</h2>
+${tabela(['Data','Município','Tipo','Descrição','Fontes'],V.map(e=>[quando(e.primeiro_em),esc(e.cidade||'Não identificado'),esc(e.tipo),`<span class="txt">${esc(e.titulo)}</span>`,fontes(e)]))}
+${V.length?`<p class="sub">Por tipo: ${[...conta(V,e=>e.tipo)].map(([t,n])=>`${esc(t)} ${n}`).join(' · ')}</p>`:''}
+
+<h2>2. Crimes por tipo</h2>
+${tabela(['Tipo','Crimes','%'],porTipo)}
+
+<h2>3. Distribuição territorial</h2>
+<div class="duas"><div><h3>Por mesorregião</h3>${tabela(['Mesorregião','Crimes','CVLI'],porReg)}</div>
+<div><h3>Municípios com mais ocorrências</h3>${tabela(['Município','Crimes','CVLI'],mun)}</div></div>
+
+<h2>4. Evolução ${porMes?'mensal':'diária'}</h2>
+${tabela([porMes?'Mês':'Dia','Crimes','CVLI'],evol)}
+
+<h2>5. Lista de crimes do período</h2>
+${tabela(['Data','Município','Tipo','Gravidade','Descrição','Fontes'],C.map(e=>[quando(e.primeiro_em),esc(e.cidade||'Não identificado'),esc(e.tipo),SEV[e.gravidade].n,`<span class="txt">${esc(e.titulo)}</span>`,fontes(e)]))}
+
+${comAnexo?`<h2>Anexo — Desdobramentos de casos (fora dos números)</h2>
+<p class="sub">Notícias publicadas no período sobre casos ocorridos antes: servem de histórico e acompanhamento, mas não são crimes novos.</p>
+${grupos.map(([k,t])=>{const l=D.filter(e=>e.natureza===k);return `<h3>${t} (${l.length})</h3>`+tabela(['Data da notícia','Município','Tipo','Manchete','Fontes'],l.map(e=>[quando(e.primeiro_em),esc(e.cidade||'Não identificado'),esc(e.tipo),`<span class="txt">${esc(e.titulo)}</span>`,fontes(e)]))}).join('')}`:''}
+</div>`;
+}
+
+// O relatório abre na própria página (sem pop-up); ao imprimir, só ele sai no papel/PDF
+function mostrarRelatorio(html){
+  const r=$('relatorio');r.innerHTML=html;document.body.classList.add('modo-rel');window.scrollTo(0,0);
+  $('relVoltar').onclick=()=>{document.body.classList.remove('modo-rel');r.innerHTML=''};
+  $('relImprimir').onclick=()=>print();
+}
+$('theme').onclick=()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme=dark?'light':'dark';try{localStorage.setItem('tema',r.dataset.theme)}catch{};render()};
+try{const t=localStorage.getItem('tema');if(t)document.documentElement.dataset.theme=t}catch{}
+
+iniciar();
+</script>
+</body>
+</html>

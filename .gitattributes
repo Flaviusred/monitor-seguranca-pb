@@ -1,0 +1,10 @@
+# Arquivos que rodam no servidor Linux ficam sempre com quebra de linha LF
+# (um .env com CRLF faria as senhas terminarem com um caractere invisível)
+* text=auto eol=lf
+# Scripts do Windows precisam de CRLF
+*.bat text eol=crlf
+# Binários
+*.png binary
+*.jpg binary
+*.gz binary
+*.db binary

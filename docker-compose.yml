@@ -1,0 +1,29 @@
+services:
+  monitor:
+    build: .
+    image: monitor-seguranca-pb
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - dados:/dados
+    # sem porta publicada: só o Caddy acessa o sistema, pela rede interna do Docker
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - monitor
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+      - caddy_config:/config
+
+volumes:
+  dados:
+  caddy_dados:
+  caddy_config:

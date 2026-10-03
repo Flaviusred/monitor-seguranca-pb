@@ -1,0 +1,12 @@
+dados/
+.env
+.env.*
+!.env.exemplo
+**/__pycache__/
+*.pyc
+*.bak
+.git/
+.claude/
+iniciar.bat
+monitor-deploy.tar.gz
+empacotar.bat

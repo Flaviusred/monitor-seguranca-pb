@@ -1,0 +1,15 @@
+# DOMINIO vem do arquivo .env. Com um domínio (ex.: monitor.seudominio.com.br) o Caddy obtém e renova
+# o certificado HTTPS sozinho. Sem domínio, fica ":80" e o painel abre por http://IP-DO-SERVIDOR
+{$DOMINIO::80} {
+	encode gzip
+	reverse_proxy monitor:8000 {
+		# envia as mensagens do tempo real (SSE) na hora, sem acumular em buffer
+		flush_interval -1
+	}
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+}

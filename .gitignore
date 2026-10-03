@@ -1,0 +1,10 @@
+# banco local e cópias de segurança
+dados/
+*.bak
+# configuração com senhas
+.env
+# Python
+__pycache__/
+*.pyc
+# pacote de deploy gerado pelo empacotar.bat
+monitor-deploy.tar.gz
