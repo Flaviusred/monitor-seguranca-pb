@@ -5,6 +5,7 @@ dados/
 .env
 # Python
 __pycache__/
+.venv/
 *.pyc
 # pacote de deploy gerado pelo empacotar.bat
 monitor-deploy.tar.gz
