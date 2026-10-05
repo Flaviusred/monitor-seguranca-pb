@@ -22,6 +22,8 @@ O banco (SQLite) fica num volume do Docker e **não se perde** ao reiniciar ou a
 
 ## 2. Preparar o servidor (uma vez só)
 
+> Usando a Oracle Cloud grátis? Siga o [DEPLOY-ORACLE.md](DEPLOY-ORACLE.md), que substitui este passo.
+
 Conecte por SSH e rode:
 
 ```bash

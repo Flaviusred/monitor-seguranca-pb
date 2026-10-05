@@ -26,6 +26,9 @@ Para publicar num servidor de testes (Docker + HTTPS automático + senha de aces
 **[DEPLOY.md](DEPLOY.md)**. Em resumo: `empacotar.bat` → enviar o pacote → ajustar o `.env` →
 `docker compose up -d --build`.
 
+Para um servidor **gratuito** na Oracle Cloud, com endereço público e HTTPS sem comprar domínio, siga o
+**[DEPLOY-ORACLE.md](DEPLOY-ORACLE.md)**.
+
 ## O que o painel mostra
 
 - **Indicadores:** fatos noticiados, CVLI (crimes letais), alta repercussão, gravidade crítica e
