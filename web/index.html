@@ -39,6 +39,7 @@ a{color:var(--primary)}
 header{position:sticky;top:0;z-index:1000;background:var(--surface);border-bottom:1px solid var(--border)}
 .hbar{max-width:1400px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .logo{width:36px;height:36px;border-radius:10px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;flex:none}
+.htitle{min-width:0}
 .htitle h1{font-size:16px;margin:0}
 .htitle small{color:var(--muted)}
 .spacer{flex:1}
@@ -128,7 +129,7 @@ header{position:sticky;top:0;z-index:1000;background:var(--surface);border-botto
 .mact{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .btn{border:none;background:var(--primary);color:#fff;border-radius:10px;padding:9px 14px;font-weight:600;cursor:pointer}
 .btn.sec{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
-.toasts{position:fixed;right:16px;bottom:16px;z-index:2100;display:flex;flex-direction:column;gap:8px;max-width:340px}
+.toasts{position:fixed;right:16px;bottom:16px;z-index:2100;display:flex;flex-direction:column;gap:8px;max-width:min(340px,calc(100vw - 32px))}
 .toast{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--g4);border-radius:10px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.15);font-size:13px;cursor:pointer;animation:tin .3s}
 .toast b{display:block;font-size:11px;text-transform:uppercase;margin-bottom:2px}
 @keyframes tin{from{transform:translateY(10px);opacity:0}}
@@ -149,6 +150,7 @@ header{position:sticky;top:0;z-index:1000;background:var(--surface);border-botto
   .hbar{gap:8px}
   .htitle h1{font-size:15px;line-height:1.2}
   .live{white-space:nowrap;padding:6px 8px}
+  .iconbtn{padding-inline:8px}
   .card h2 .sub{display:none}
   .kpis{grid-template-columns:1fr 1fr}
   .kpi .v{font-size:22px}
