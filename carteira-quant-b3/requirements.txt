@@ -1,5 +1,6 @@
 pandas>=2.2
 numpy>=1.26
 yfinance>=0.2.50
+tomli>=2.0; python_version < "3.11"
 matplotlib>=3.8   # opcional: gráfico do backtest
 pytest>=8          # testes

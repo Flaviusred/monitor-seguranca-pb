@@ -7,11 +7,15 @@
 from __future__ import annotations
 
 import argparse
-import tomllib
 from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 from . import backtest, dados, metricas
 from .carteira import gerar_ordens, pesos_alvo

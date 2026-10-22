@@ -20,7 +20,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -r requirements.txt
 ```
 
-Requer Python 3.11+.
+Requer Python 3.10+.
 
 ## Uso
 
