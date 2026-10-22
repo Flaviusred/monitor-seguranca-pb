@@ -1,0 +1,40 @@
+# Configuração da carteira quantitativa B3.
+# Os tickers são informados sem o sufixo ".SA" (ele é adicionado automaticamente).
+
+[universo]
+# Ações líquidas da B3. Revise periodicamente: tickers mudam (fusões, renomeações,
+# deslistagens). Ticker sem dados é descartado com aviso.
+# ATENÇÃO: usar apenas empresas que existem HOJE gera viés de sobrevivência no backtest.
+tickers = [
+  "PETR3", "PETR4", "VALE3", "ITUB4", "BBDC4", "BBAS3", "SANB11", "BPAC11", "ITSA4",
+  "B3SA3", "BBSE3", "ABEV3", "WEGE3", "RENT3", "SUZB3", "KLBN11", "GGBR4", "GOAU4",
+  "CSNA3", "USIM5", "CMIN3", "BRAP4", "LREN3", "RADL3", "RAIL3", "PRIO3", "EQTL3",
+  "SBSP3", "CMIG4", "EGIE3", "TAEE11", "CPFE3", "ENEV3", "VIVT3", "TIMS3", "CSAN3",
+  "UGPA3", "VBBR3", "HAPV3", "RDOR3", "FLRY3", "HYPE3", "TOTS3", "MULT3", "CYRE3",
+  "MRVE3", "ASAI3", "MGLU3", "YDUQ3", "COGN3", "SMTO3", "SLCE3", "BRKM5", "POMO4",
+]
+benchmark = "BOVA11"     # ETF do Ibovespa, usado para comparação
+
+[filtros]
+liquidez_minima = 20_000_000   # volume financeiro médio diário (R$) nos últimos 63 pregões
+preco_minimo = 2.0             # evita "penny stocks"
+
+[fatores]
+# Pontuação = peso_momentum * z(momentum) - peso_volatilidade * z(volatilidade)
+janela_momentum = 252          # ~12 meses
+pular_recente = 21             # ignora o último mês (efeito de reversão de curto prazo)
+janela_volatilidade = 63       # ~3 meses
+peso_momentum = 1.0
+peso_volatilidade = 0.5
+
+[carteira]
+num_ativos = 10
+ponderacao = "igual"           # "igual" ou "inv_vol" (inverso da volatilidade)
+lote_minimo = 1                # 1 = mercado fracionário; 100 = lote padrão
+
+[backtest]
+inicio = "2015-01-01"
+capital_inicial = 100_000
+custo_bps = 15                 # custo por lado em pontos-base (emolumentos + slippage)
+atraso_execucao = 1            # pregões entre o sinal (fechamento) e a execução
+taxa_livre_risco_anual = 0.11  # aproximação do CDI médio, usada no Sharpe
