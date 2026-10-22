@@ -92,10 +92,12 @@ def grade(curvas: dict[tuple[str, str], pd.DataFrame], cdi: pd.Series,
 
 
 def walk_forward(curvas: dict[tuple[str, str], pd.DataFrame], cdi: pd.Series,
-                 benchmark: pd.Series | None, cortes=CORTES, aliquota_ref: float = 0.0) -> pd.DataFrame:
+                 benchmark: pd.Series | None, cortes=CORTES, aliquota_ref: float = 0.0,
+                 peso_igual: pd.DataFrame | None = None) -> pd.DataFrame:
     """Para cada corte: escolhe a melhor (Sharpe) antes dele e mede o depois.
 
     CAGRs "depois" consideram vender tudo no fim pagando IR (`aliquota_ref` nas referências).
+    `peso_igual`: curva (pat, lat) da carteira com todas as ações em peso igual.
     """
     linhas = []
     for corte in map(pd.Timestamp, cortes):
@@ -114,6 +116,8 @@ def walk_forward(curvas: dict[tuple[str, str], pd.DataFrame], cdi: pd.Series,
         }
         if benchmark is not None:
             reg["cagr_bench"] = metricas.cagr_vendendo_no_fim(benchmark.loc[corte:], aliquota_ref)
+        if peso_igual is not None:
+            reg["cagr_peso_igual"] = _cagr_liquido(peso_igual.loc[corte:])
         linhas.append(reg)
     return pd.DataFrame(linhas)
 
@@ -133,11 +137,14 @@ def tabela_cruzada(g: pd.DataFrame, valor: str, fmt) -> str:
 def formatar_walk_forward(wf: pd.DataFrame, nome_bench: str) -> str:
     pct = lambda v: "" if pd.isna(v) else f"{v:.1%}"  # noqa: E731
     larg_esc = max([len("Escolhida (melhor Sharpe antes do corte)")] + [len(e) for e in wf["escolhida"]]) + 2
+    tem_pi = "cagr_peso_igual" in wf
     cab = (f"{'Corte':<9}{'Escolhida (melhor Sharpe antes do corte)':<{larg_esc}}"
-           f"{'CAGR depois':>12}{'Posição':>9}{'Mediana':>9}{nome_bench:>9}{'CDI':>8}")
+           f"{'CAGR depois':>12}{'Posição':>9}{'Mediana':>9}"
+           + (f"{'Peso igual':>12}" if tem_pi else "") + f"{nome_bench:>9}{'CDI':>8}")
     linhas = [cab]
     for _, r in wf.iterrows():
         linhas.append(f"{r['corte']:%m/%Y}  {r['escolhida']:<{larg_esc}}{pct(r['cagr_escolhida']):>12}"
                       f"{r['posicao']:>9}{pct(r['cagr_mediana']):>9}"
-                      f"{pct(r.get('cagr_bench')):>9}{pct(r['cdi']):>8}")
+                      + (f"{pct(r['cagr_peso_igual']):>12}" if tem_pi else "")
+                      + f"{pct(r.get('cagr_bench')):>9}{pct(r['cdi']):>8}")
     return "\n".join(linhas)

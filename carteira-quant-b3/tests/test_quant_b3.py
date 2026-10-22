@@ -343,3 +343,34 @@ def test_capital_inicial_nao_rende_no_aquecimento():
     res = backtest.executar(precos, volume, CFG)
     custo_primeira = res.rebalanceamentos["custo"].iloc[0]
     assert res.patrimonio.iloc[0] == pytest.approx(CFG["backtest"]["capital_inicial"] - custo_primeira)
+
+
+def test_uma_por_empresa_e_limite_por_setor():
+    from quant_b3.carteira import opcoes_selecao
+
+    ranking = pd.DataFrame({"volatilidade": 0.3},
+                           index=["PETR4", "PETR3", "PRIO3", "VBBR3", "GOAU4", "GGBR4", "WEGE3", "VALE3"])
+    cfg = {"carteira": {"faixa_manutencao": 0, "uma_por_empresa": True, "max_por_setor": 2},
+           "empresas": {"mesmo_grupo": [["GGBR4", "GOAU4"]]},
+           "setores": {"Petróleo": ["PETR3", "PETR4", "PRIO3", "VBBR3"],
+                       "Siderurgia": ["GGBR4", "GOAU4"]}}
+    pesos = pesos_alvo(ranking, 5, **opcoes_selecao(cfg))
+    # PETR3 sai (mesma empresa); VBBR3 sai (limite de 2 em Petróleo); GGBR4 sai (grupo Gerdau)
+    assert list(pesos.index) == ["PETR4", "PRIO3", "GOAU4", "WEGE3", "VALE3"]
+
+    # Já tendo PETR3 em carteira, ela é mantida no lugar de PETR4 (evita troca à toa)
+    pesos = pesos_alvo(ranking, 5, atuais=["PETR3"], **{**opcoes_selecao(cfg), "faixa": 6})
+    assert "PETR3" in pesos.index and "PETR4" not in pesos.index
+
+    # Desligado: comportamento original
+    assert list(pesos_alvo(ranking, 3).index) == ["PETR4", "PETR3", "PRIO3"]
+
+
+def test_peso_igual_compra_todas_as_elegiveis():
+    from quant_b3 import comparar
+
+    precos, volume = dados_sinteticos(n_ativos=12)
+    cfg = comparar.aplicar(CFG, comparar.CENARIOS[comparar.PESO_IGUAL])
+    res = backtest.executar(precos, volume, cfg)
+    ultimos = list(res.pesos.values())[-1]
+    assert len(ultimos) == 12 and ultimos.round(6).nunique() == 1

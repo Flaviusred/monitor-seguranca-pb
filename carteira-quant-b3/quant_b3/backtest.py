@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .carteira import pesos_alvo
+from .carteira import opcoes_selecao, pesos_alvo
 from .cdi import retornos_por_pregao
 from .fatores import abaixo_da_media, calcular_fatores, pontuar
 from .ir import ApuracaoIR
@@ -69,6 +69,7 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
         if pos < len(indice):
             agenda[indice[pos]] = d
 
+    selecao = opcoes_selecao(cfg)
     custo_taxa = bt["custo_bps"] / 10_000
     caixa = float(bt["capital_inicial"])
     colunas = precos.columns
@@ -101,7 +102,7 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
                 ranking = pontuar(precos, volume_financeiro, data_sinal, cfg, fatores)
                 atuais = colunas[posicoes > 0]
                 pesos = pesos_alvo(ranking, cart["num_ativos"], cart["ponderacao"],
-                                   atuais, cart.get("faixa_manutencao"))
+                                   atuais, **selecao)
                 # Só compra o que tem preço no dia da execução.
                 pesos = pesos[precos.loc[d, pesos.index].notna()]
                 pesos = pesos / pesos.sum() if len(pesos) else pesos

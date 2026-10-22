@@ -10,17 +10,24 @@ from . import backtest, metricas
 # Cada cenário altera o config.toml base. Chaves: seção -> {parâmetro: valor}.
 CENARIOS: dict[str, dict] = {
     "Base (config.toml)": {},
+    # Referência: todas as ações elegíveis com peso igual, sem ranking.
+    "Peso igual (todas)": {"carteira": {"num_ativos": 999, "faixa_manutencao": 999,
+                                        "uma_por_empresa": False, "max_por_setor": 0}},
     "Só momentum": {"fatores": {"peso_volatilidade": 0.0}},
     "Só baixa volatilidade": {"fatores": {"peso_momentum": 0.0}},
     "Trimestral": {"carteira": {"frequencia_meses": 3}},
-    "Faixa top 20": {"carteira": {"faixa_manutencao": 20}},
-    "Trimestral + faixa 20": {"carteira": {"frequencia_meses": 3, "faixa_manutencao": 20}},
+    "Sem faixa": {"carteira": {"faixa_manutencao": 0}},
     "Filtro tendência": {"tendencia": {"ativo": True}},
-    "Tendência + faixa 20": {"tendencia": {"ativo": True}, "carteira": {"faixa_manutencao": 20}},
-    "Tendência + trim. + faixa 20": {"tendencia": {"ativo": True},
-                                     "carteira": {"frequencia_meses": 3, "faixa_manutencao": 20}},
-    "20 ativos + faixa 30": {"carteira": {"num_ativos": 20, "faixa_manutencao": 30}},
+    "Uma por empresa": {"carteira": {"uma_por_empresa": True}},
+    "Máx. 5 por setor": {"carteira": {"max_por_setor": 5}},
+    "Máx. 3 por setor": {"carteira": {"max_por_setor": 3}},
+    "Empresa + máx. 5/setor": {"carteira": {"uma_por_empresa": True, "max_por_setor": 5}},
+    "Config. original (10 ativos)": {"carteira": {"num_ativos": 10, "faixa_manutencao": 10},
+                                     "fatores": {"peso_momentum": 1.0, "peso_volatilidade": 0.5}},
 }
+
+# Cenário usado como referência "sem ranking" em outros relatórios.
+PESO_IGUAL = "Peso igual (todas)"
 
 
 def aplicar(cfg: dict, alteracoes: dict) -> dict:

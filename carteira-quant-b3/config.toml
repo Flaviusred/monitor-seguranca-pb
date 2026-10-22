@@ -34,6 +34,36 @@ lote_minimo = 1                # 1 = mercado fracionário; 100 = lote padrão
 frequencia_meses = 1           # rebalanceia a cada N meses (1 = mensal, 3 = trimestral)
 faixa_manutencao = 35          # ação em carteira só sai se cair para fora das N melhores
                                # (igual a num_ativos = sem faixa; maior = menos giro)
+uma_por_empresa = false        # só a melhor ação de cada empresa (ex.: PETR3 ou PETR4)
+max_por_setor = 0              # limite de ações do mesmo setor ([setores]); 0 = sem limite
+
+[empresas]
+# Ações da mesma empresa são reconhecidas pela raiz do ticker (PETR3/PETR4 -> PETR).
+# Aqui entram grupos com raízes diferentes (holdings e controladas).
+mesmo_grupo = [
+  ["GGBR4", "GOAU4"],   # Gerdau e Metalúrgica Gerdau
+  ["ITUB4", "ITSA4"],   # Itaú e Itaúsa
+  ["VALE3", "BRAP4"],   # Vale e Bradespar
+]
+
+[setores]
+# Usado por max_por_setor. Ação fora desta lista não tem limite de setor.
+"Petróleo e combustíveis" = ["PETR3", "PETR4", "PRIO3", "VBBR3", "UGPA3", "CSAN3"]
+"Mineração" = ["VALE3", "CMIN3", "BRAP4"]
+"Siderurgia" = ["GGBR4", "GOAU4", "CSNA3", "USIM5"]
+"Financeiro" = ["ITUB4", "BBDC4", "BBAS3", "SANB11", "BPAC11", "ITSA4", "B3SA3", "BBSE3"]
+"Energia elétrica" = ["EQTL3", "CMIG4", "EGIE3", "TAEE11", "CPFE3", "ENEV3"]
+"Saneamento" = ["SBSP3"]
+"Varejo e consumo" = ["ABEV3", "LREN3", "MGLU3", "ASAI3", "RADL3"]
+"Saúde" = ["HAPV3", "RDOR3", "FLRY3", "HYPE3"]
+"Telecomunicações" = ["VIVT3", "TIMS3"]
+"Indústria e logística" = ["WEGE3", "RENT3", "RAIL3", "POMO4"]
+"Papel e celulose" = ["SUZB3", "KLBN11"]
+"Química" = ["BRKM5"]
+"Imobiliário" = ["MULT3", "CYRE3", "MRVE3"]
+"Tecnologia" = ["TOTS3"]
+"Educação" = ["YDUQ3", "COGN3"]
+"Agronegócio" = ["SMTO3", "SLCE3"]
 
 [tendencia]
 # Se o benchmark estiver abaixo da média móvel, a carteira inteira vai para o caixa (CDI).

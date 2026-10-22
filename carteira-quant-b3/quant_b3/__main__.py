@@ -20,7 +20,7 @@ except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
 from . import backtest, cdi, comparar, dados, metricas, robustez
-from .carteira import gerar_ordens, pesos_alvo
+from .carteira import gerar_ordens, opcoes_selecao, pesos_alvo
 from .fatores import abaixo_da_media, pontuar
 from .paper import Carteira
 
@@ -161,7 +161,12 @@ def cmd_robustez(cfg: dict, args) -> None:
     curvas = robustez.rodar(precos, volume, cfg, ret_cdi)
     g = robustez.grade(curvas, ret_cdi, precos_bench, corte)
     aliquota = comparar.aliquota_ir(cfg)
-    wf = robustez.walk_forward(curvas, ret_cdi, precos_bench, aliquota_ref=aliquota)
+    # Referência sem ranking: todas as ações com peso igual.
+    res_pi = backtest.executar(precos, volume, comparar.aplicar(cfg, comparar.CENARIOS[comparar.PESO_IGUAL]),
+                               ret_cdi)
+    peso_igual = pd.DataFrame({"pat": res_pi.patrimonio,
+                               "lat": res_pi.imposto_latente.reindex(res_pi.patrimonio.index).fillna(0.0)})
+    wf = robustez.walk_forward(curvas, ret_cdi, precos_bench, aliquota_ref=aliquota, peso_igual=peso_igual)
 
     pct = lambda v: "" if pd.isna(v) else f"{v:.1%}"  # noqa: E731
     num = lambda v: "" if pd.isna(v) else f"{v:.2f}"  # noqa: E731
@@ -180,7 +185,8 @@ def cmd_robustez(cfg: dict, args) -> None:
     if precos_bench is not None:
         b = precos_bench.loc[corte:].dropna()
         print(f"\nReferência na validação: {bench} {pct(metricas.cagr_vendendo_no_fim(b, aliquota))} | "
-              f"CDI {pct(metricas.cagr_vendendo_no_fim((1 + ret_cdi.loc[corte:]).cumprod(), aliquota))}")
+              f"CDI {pct(metricas.cagr_vendendo_no_fim((1 + ret_cdi.loc[corte:]).cumprod(), aliquota))} | "
+              f"Peso igual (todas as ações) {pct(robustez._cagr_liquido(peso_igual.loc[corte:]))}")
     if aliquota:
         print("CAGRs após IR, vendendo tudo no fim de cada período (estratégias pagam também o IR\n"
               "mensal ao longo do caminho). O item 4 compara retornos anuais da estratégia já com IR\n"
@@ -190,7 +196,9 @@ def cmd_robustez(cfg: dict, args) -> None:
     print(robustez.formatar_walk_forward(wf, bench))
     print("\nComo ler: vizinhos com números parecidos (sem uma célula isolada muito melhor) indicam\n"
           "robustez. No walk-forward, a escolhida deveria ficar acima da mediana e do benchmark\n"
-          "na maioria dos cortes; se não ficar, escolher pelo passado não está funcionando.")
+          "na maioria dos cortes; se não ficar, escolher pelo passado não está funcionando.\n"
+          "Se a carteira de peso igual render tanto quanto as configurações, o ranking por\n"
+          "fatores não está acrescentando nada além de diversificar em peso igual.")
 
     saida = RAIZ / "resultados"
     saida.mkdir(exist_ok=True)
@@ -215,7 +223,7 @@ def cmd_carteira(cfg: dict, args) -> None:
     ranking = pontuar(precos, volume, data, cfg)
     cart = cfg["carteira"]
     pesos = pesos_alvo(ranking, cart["num_ativos"], cart["ponderacao"],
-                       paper.posicoes, cart.get("faixa_manutencao"))
+                       paper.posicoes, **opcoes_selecao(cfg))
     tendencia = cfg.get("tendencia", {})
     if tendencia.get("ativo"):
         if precos_bench is None:

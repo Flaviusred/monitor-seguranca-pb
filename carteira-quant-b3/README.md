@@ -17,6 +17,13 @@ Opções para reduzir giro e risco (em `config.toml`):
 - **`[tendencia]`**: se o benchmark (BOVA11) estiver abaixo da média de 200 dias,
   a carteira inteira vai para o caixa.
 
+Controle de concentração (desligado por padrão):
+
+- **`uma_por_empresa`**: só a melhor ação de cada empresa. PETR3 e PETR4 contam como
+  uma empresa, e holdings também (grupos em `[empresas]`).
+- **`max_por_setor`**: limite de ações do mesmo setor. Os setores ficam em `[setores]`;
+  revise ao mudar o universo.
+
 **Imposto de renda** (seção `[impostos]`): o backtest apura o IR mês a mês, como
 no swing trade em ações. São 15% sobre o lucro, com isenção no mês em que as vendas
 somam até R$ 20 mil e compensação de prejuízos, usando o preço médio. Para comparar
@@ -66,9 +73,12 @@ python -m quant_b3 comparar                    # corte padrão em 01/2021
 python -m quant_b3 comparar --corte 2020-01-01
 ```
 
-Roda os cenários definidos em `quant_b3/comparar.py` (só momentum, só baixa
-volatilidade, trimestral, faixa, filtro de tendência e combinações) e mostra as métricas
-separadas em dois períodos:
+Roda os cenários definidos em `quant_b3/comparar.py` e mostra as métricas separadas
+em dois períodos. Entre os cenários estão a referência **"Peso igual (todas)"** (todas as
+ações com o mesmo peso, sem ranking), só momentum, só baixa volatilidade, trimestral,
+sem faixa, filtro de tendência, uma ação por empresa, limite por setor e a configuração
+original. Se a estratégia não superar o "Peso igual", o ranking não está acrescentando
+nada além da diversificação.
 
 - **Calibração** (antes do corte): use para escolher a configuração.
 - **Validação** (depois do corte): confirma se a vantagem se mantém em dados que não
