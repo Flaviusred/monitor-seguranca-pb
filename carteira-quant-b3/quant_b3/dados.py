@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 import warnings
 from pathlib import Path
@@ -71,11 +72,19 @@ def baixar_yahoo(tickers: list[str], inicio: str, fim: str | None = None,
 def _baixar(yf, tickers: list[str], inicio: str, fim: str | None,
             threads) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Uma chamada ao yfinance; devolve todas as colunas pedidas (vazias se falhar)."""
+    # Falhas de uma ação são tratadas aqui (nova tentativa e aviso final), então
+    # silencia os avisos e erros que o yfinance imprime por conta própria.
+    log = logging.getLogger("yfinance")
+    nivel = log.level
+    log.setLevel(logging.CRITICAL + 1)
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # avisos internos do yfinance, sem utilidade aqui
-        bruto = yf.download([_com_sufixo(t) for t in tickers], start=inicio, end=fim,
-                            auto_adjust=True, progress=False, group_by="column",
-                            multi_level_index=True, threads=threads, timeout=30)
+        warnings.simplefilter("ignore")
+        try:
+            bruto = yf.download([_com_sufixo(t) for t in tickers], start=inicio, end=fim,
+                                auto_adjust=True, progress=False, group_by="column",
+                                multi_level_index=True, threads=threads, timeout=30)
+        finally:
+            log.setLevel(nivel)
     if bruto.empty:
         vazio = pd.DataFrame(columns=tickers, index=pd.DatetimeIndex([]), dtype=float)
         return vazio, vazio.copy()
