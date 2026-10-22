@@ -283,6 +283,56 @@ def test_robustez_grade_e_walk_forward():
     # a escolhida tem mesmo o maior Sharpe antes do corte
     from quant_b3 import metricas
     corte = pd.Timestamp("2017-01-01")
-    melhor = max(curvas, key=lambda k: metricas.resumo(curvas[k].loc[:corte], cdi)["sharpe"])
+    melhor = max(curvas, key=lambda k: metricas.resumo(curvas[k]["pat"].loc[:corte], cdi)["sharpe"])
     assert wf.iloc[0]["escolhida"] == f"{melhor[0]} | {melhor[1]}"
     assert "Escolhida" in robustez.formatar_walk_forward(wf, "IDX")
+
+
+def test_ir_isencao_tributacao_e_compensacao():
+    from quant_b3.ir import ApuracaoIR
+
+    ir = ApuracaoIR(2)
+    ir.operar(np.array([0.0, 0.0]), np.array([30_000.0, 30_000.0]))      # compra: custo 30k cada
+    assert ir.fechar_mes(pd.Period("2024-01")) == 0
+
+    # Mês com vendas de 15k (isento) e lucro: não paga
+    ir.operar(np.array([40_000.0, 30_000.0]), np.array([25_000.0, 30_000.0]))
+    assert ir.fechar_mes(pd.Period("2024-02")) == 0
+    assert ir.custo[0] == pytest.approx(30_000 * 25 / 40)                 # preço médio mantido
+
+    # Vende B inteira por 25k (> 20k, não isento) com prejuízo de 5k: acumula prejuízo
+    ir.operar(np.array([25_000.0, 25_000.0]), np.array([25_000.0, 0.0]))
+    assert ir.fechar_mes(pd.Period("2024-03")) == 0
+    assert ir.prejuizo == pytest.approx(5_000)
+
+    # Vende A inteira por 35k (> 20k): lucro 35k - 18.75k = 16.25k; compensa 5k
+    ir.operar(np.array([35_000.0, 0.0]), np.array([0.0, 0.0]))
+    assert ir.fechar_mes(pd.Period("2024-04")) == pytest.approx(0.15 * (16_250 - 5_000))
+    assert ir.prejuizo == 0
+    assert ir.imposto_latente(np.zeros(2)) == 0
+    assert list(ir.tabela()["isento"]) == [True, False, False]  # jan. só teve compras
+
+
+def test_backtest_com_ir_paga_imposto_e_reduz_resultado():
+    precos, volume = dados_sinteticos(n_ativos=12, semente=2)
+    cfg_ir = {**CFG, "impostos": {"ativo": True, "aliquota": 0.15, "isencao_mensal_vendas": 20_000}}
+    sem = backtest.executar(precos, volume, CFG)
+    com = backtest.executar(precos, volume, cfg_ir)
+    assert com.impostos["imposto"].sum() > 0
+    assert com.patrimonio.iloc[-1] < sem.patrimonio.iloc[-1]
+    assert (sem.imposto_latente == 0).all() and (com.imposto_latente >= 0).all()
+    assert (com.patrimonio_liquido() <= com.patrimonio).all()
+
+    # Com capital pequeno, as vendas mensais ficam abaixo de R$ 20 mil: tudo isento
+    pequeno = {**cfg_ir, "backtest": {**CFG["backtest"], "capital_inicial": 5_000}}
+    res = backtest.executar(precos, volume, pequeno)
+    assert res.impostos["isento"].all() and res.impostos["imposto"].sum() == 0
+
+
+def test_cagr_vendendo_no_fim():
+    from quant_b3 import metricas
+
+    datas = pd.bdate_range("2020-01-01", "2022-01-01")
+    serie = pd.Series(np.linspace(100, 121, len(datas)), index=datas)
+    assert metricas.cagr_vendendo_no_fim(serie, 0.0) == pytest.approx(0.10, abs=0.002)
+    assert metricas.cagr_vendendo_no_fim(serie, 0.15) == pytest.approx((117.85 / 100) ** 0.5 - 1, abs=0.002)

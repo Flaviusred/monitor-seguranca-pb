@@ -30,13 +30,24 @@ def aplicar(cfg: dict, alteracoes: dict) -> dict:
     return novo
 
 
-def _linha(patrimonio: pd.Series, cdi: pd.Series, corte: pd.Timestamp) -> dict[str, float]:
+def aliquota_ir(cfg: dict) -> float:
+    impostos = cfg.get("impostos", {})
+    return impostos.get("aliquota", 0.15) if impostos.get("ativo") else 0.0
+
+
+def _linha(patrimonio: pd.Series, cdi: pd.Series, corte: pd.Timestamp,
+           latente: pd.Series | None = None, aliquota_ref: float = 0.0) -> dict[str, float]:
+    """Métricas antes e depois do corte. O CAGR considera a venda de tudo no fim de
+    cada trecho: estratégias descontam o IR latente; referências pagam `aliquota_ref`."""
     linha = {}
     for sufixo, trecho in (("calib", patrimonio.loc[:corte]), ("valid", patrimonio.loc[corte:])):
         if len(trecho) < 20:
             continue
         m = metricas.resumo(trecho, cdi)
-        linha[f"cagr_{sufixo}"] = m["cagr"]
+        if latente is not None:
+            linha[f"cagr_{sufixo}"] = metricas.cagr(trecho, latente.get(trecho.index[-1], 0.0))
+        else:
+            linha[f"cagr_{sufixo}"] = metricas.cagr_vendendo_no_fim(trecho, aliquota_ref)
         linha[f"sharpe_{sufixo}"] = m["sharpe"]
         linha[f"dd_{sufixo}"] = m["max_drawdown"]
     return linha
@@ -54,10 +65,12 @@ def rodar(precos: pd.DataFrame, volume: pd.DataFrame, cfg: dict, cdi: pd.Series,
         pat = res.patrimonio
         anos = (pat.index[-1] - pat.index[0]).days / 365.25
         r = res.rebalanceamentos
+        ir_pago = res.impostos["imposto"].sum() if len(res.impostos) else 0.0
         linhas[nome] = {
-            **_linha(pat, cdi, corte),
+            **_linha(pat, cdi, corte, res.imposto_latente),
             "giro_anual": r["giro"].sum() / anos,
             "custo_anual": (r["custo"] / pat.reindex(r["data_execucao"]).values).sum() / anos,
+            "ir_anual": ir_pago / pat.mean() / anos,
             "meses_caixa": r["em_caixa"].mean(),
         }
         print(f"  {nome}: ok")
@@ -70,7 +83,7 @@ def rodar(precos: pd.DataFrame, volume: pd.DataFrame, cfg: dict, cdi: pd.Series,
     fator_cdi = (1 + cdi.loc[inicio:]).cumprod()
     ref["CDI"] = fator_cdi
     for nome, serie in ref.items():
-        linhas[nome] = _linha(serie, cdi, corte)
+        linhas[nome] = _linha(serie, cdi, corte, aliquota_ref=aliquota_ir(cfg))
     return pd.DataFrame(linhas).T
 
 
@@ -82,6 +95,7 @@ def formatar(tabela: pd.DataFrame, corte: pd.Timestamp, fim: pd.Timestamp) -> st
         ("cagr_valid", "CAGR", pct), ("sharpe_valid", "Sharpe", num), ("dd_valid", "Queda máx", pct),
         ("giro_anual", "Giro/ano", lambda v: "" if pd.isna(v) else f"{v:5.0%}"),
         ("custo_anual", "Custo/ano", lambda v: "" if pd.isna(v) else f"{v:5.2%}"),
+        ("ir_anual", "IR/ano", lambda v: "" if pd.isna(v) else f"{v:5.2%}"),
         ("meses_caixa", "Em caixa", lambda v: "" if pd.isna(v) else f"{v:4.0%}"),
     ]
     largura_nome = max(len(n) for n in tabela.index) + 2

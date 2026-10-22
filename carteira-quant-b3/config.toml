@@ -25,24 +25,31 @@ janela_momentum = 252          # ~12 meses
 pular_recente = 21             # ignora o último mês (efeito de reversão de curto prazo)
 janela_volatilidade = 63       # ~3 meses
 peso_momentum = 1.0
-peso_volatilidade = 0.5
+peso_volatilidade = 1.0
 
 [carteira]
-num_ativos = 10
+num_ativos = 25                # escolhido no meio da "região boa" do teste de robustez
 ponderacao = "igual"           # "igual" ou "inv_vol" (inverso da volatilidade)
 lote_minimo = 1                # 1 = mercado fracionário; 100 = lote padrão
 frequencia_meses = 1           # rebalanceia a cada N meses (1 = mensal, 3 = trimestral)
-faixa_manutencao = 10          # ação em carteira só sai se cair para fora das N melhores
-                               # (igual a num_ativos = sem faixa; 20 reduz o giro)
+faixa_manutencao = 35          # ação em carteira só sai se cair para fora das N melhores
+                               # (igual a num_ativos = sem faixa; maior = menos giro)
 
 [tendencia]
 # Se o benchmark estiver abaixo da média móvel, a carteira inteira vai para o caixa (CDI).
 ativo = false
 media_dias = 200
 
+[impostos]
+# IR sobre ações (swing trade): 15% do lucro, isento no mês com vendas até R$ 20 mil,
+# prejuízos compensados nos meses seguintes. BOVA11 e CDI pagam 15% na venda final.
+ativo = true
+aliquota = 0.15
+isencao_mensal_vendas = 20_000
+
 [backtest]
 inicio = "2015-01-01"
-capital_inicial = 100_000
+capital_inicial = 100_000      # importa para o IR: carteiras menores ficam mais vezes na isenção
 custo_bps = 15                 # custo por lado em pontos-base (emolumentos + slippage)
 atraso_execucao = 1            # pregões entre o sinal (fechamento) e a execução
 taxa_livre_risco_anual = 0.11  # usada só se o CDI do Banco Central não puder ser baixado

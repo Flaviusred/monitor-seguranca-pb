@@ -77,11 +77,17 @@ def cmd_backtest(cfg: dict, args) -> None:
               "(a carteira ficou em caixa). Revise [filtros] no config.")
 
     capital = cfg["backtest"]["capital_inicial"]
-    tabela = {"Estratégia": metricas.resumo(res.patrimonio, ret_cdi)}
+    aliquota = comparar.aliquota_ir(cfg)
+    curvas = {"Estratégia": res.patrimonio}
     if precos_bench is not None:
         b = precos_bench.loc[res.patrimonio.index[0]:].dropna()
-        tabela[bench] = metricas.resumo(b / b.iloc[0] * capital, ret_cdi)
-    tabela["CDI"] = metricas.resumo((1 + ret_cdi.loc[res.patrimonio.index[0]:]).cumprod() * capital, ret_cdi)
+        curvas[bench] = b / b.iloc[0] * capital
+    curvas["CDI"] = (1 + ret_cdi.loc[res.patrimonio.index[0]:]).cumprod() * capital
+    tabela = {nome: metricas.resumo(c, ret_cdi) for nome, c in curvas.items()}
+    # Vendendo tudo no fim: a estratégia paga o IR latente; BOVA11 e CDI pagam sobre o ganho.
+    tabela["Estratégia"]["cagr_liquido"] = metricas.cagr(res.patrimonio, res.imposto_latente.iloc[-1])
+    for nome in list(curvas)[1:]:
+        tabela[nome]["cagr_liquido"] = metricas.cagr_vendendo_no_fim(curvas[nome], aliquota)
 
     print(f"\nPeríodo: {res.patrimonio.index[0]:%d/%m/%Y} a {res.patrimonio.index[-1]:%d/%m/%Y}"
           f" | {len(res.rebalanceamentos)} rebalanceamentos")
@@ -95,11 +101,23 @@ def cmd_backtest(cfg: dict, args) -> None:
                           ("meses_positivos", "Meses positivos")]:
         print(f"{rotulo:16}" + "".join(f"{fmt_pct(m[chave]):>14}" for m in tabela.values()))
     print(f"{'Sharpe':16}" + "".join(f"{m['sharpe']:>14.2f}" for m in tabela.values()))
+    if aliquota:
+        print(f"{'CAGR após IR*':16}" + "".join(f"{fmt_pct(m['cagr_liquido']):>14}" for m in tabela.values()))
+        ir = res.impostos
+        pago = ir["imposto"].sum() if len(ir) else 0.0
+        meses_tributados = int((~ir["isento"] & (ir["imposto"] > 0)).sum()) if len(ir) else 0
+        print(f"\nIR pago pela estratégia: R$ {pago:,.2f} em {meses_tributados} meses"
+              f" | IR se vendesse tudo hoje: R$ {res.imposto_latente.iloc[-1]:,.2f}"
+              f" | prejuízo a compensar: R$ {ir['prejuizo_acumulado'].iloc[-1] if len(ir) else 0:,.2f}")
+        print("* CAGR de quem vende tudo no fim do período, pagando o IR devido. A estratégia já\n"
+              "  paga IR mês a mês ao longo do caminho; BOVA11 e CDI só pagam na venda.")
 
     saida = RAIZ / "resultados"
     saida.mkdir(exist_ok=True)
     res.patrimonio.to_csv(saida / "patrimonio.csv")
     res.rebalanceamentos.to_csv(saida / "rebalanceamentos.csv", index=False)
+    if len(res.impostos):
+        res.impostos.to_csv(saida / "impostos.csv", index=False)
     print(f"\nArquivos salvos em {saida}/")
     try:
         import matplotlib
@@ -142,7 +160,8 @@ def cmd_robustez(cfg: dict, args) -> None:
     print("\nRodando a grade de parâmetros...")
     curvas = robustez.rodar(precos, volume, cfg, ret_cdi)
     g = robustez.grade(curvas, ret_cdi, precos_bench, corte)
-    wf = robustez.walk_forward(curvas, ret_cdi, precos_bench)
+    aliquota = comparar.aliquota_ir(cfg)
+    wf = robustez.walk_forward(curvas, ret_cdi, precos_bench, aliquota_ref=aliquota)
 
     pct = lambda v: "" if pd.isna(v) else f"{v:.1%}"  # noqa: E731
     num = lambda v: "" if pd.isna(v) else f"{v:.2f}"  # noqa: E731
@@ -160,8 +179,12 @@ def cmd_robustez(cfg: dict, args) -> None:
 
     if precos_bench is not None:
         b = precos_bench.loc[corte:].dropna()
-        print(f"\nReferência na validação: {bench} {pct(robustez._cagr(b))} | "
-              f"CDI {pct(robustez._cagr((1 + ret_cdi.loc[corte:]).cumprod()))}")
+        print(f"\nReferência na validação: {bench} {pct(metricas.cagr_vendendo_no_fim(b, aliquota))} | "
+              f"CDI {pct(metricas.cagr_vendendo_no_fim((1 + ret_cdi.loc[corte:]).cumprod(), aliquota))}")
+    if aliquota:
+        print("CAGRs após IR, vendendo tudo no fim de cada período (estratégias pagam também o IR\n"
+              "mensal ao longo do caminho). O item 4 compara retornos anuais da estratégia já com IR\n"
+              f"mensal pago contra o {bench} sem IR (comparação conservadora).")
     print("\n5) Walk-forward: escolher a melhor configuração com os dados de antes de cada corte\n"
           "   e medir o que ela rendeu depois (posição = colocação entre todas as configurações)\n")
     print(robustez.formatar_walk_forward(wf, bench))

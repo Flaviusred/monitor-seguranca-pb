@@ -9,6 +9,7 @@ import pandas as pd
 from .carteira import pesos_alvo
 from .cdi import retornos_por_pregao
 from .fatores import abaixo_da_media, calcular_fatores, pontuar
+from .ir import ApuracaoIR
 
 
 @dataclass
@@ -16,6 +17,13 @@ class ResultadoBacktest:
     patrimonio: pd.Series
     rebalanceamentos: pd.DataFrame          # data_sinal, data_execucao, giro, custo, em_caixa, ativos
     pesos: dict[pd.Timestamp, pd.Series] = field(default_factory=dict)
+    impostos: pd.DataFrame = field(default_factory=pd.DataFrame)   # apuração mensal de IR
+    # Imposto que seria pago vendendo tudo em cada data (0 sem IR ativo).
+    imposto_latente: pd.Series = field(default_factory=pd.Series)
+
+    def patrimonio_liquido(self) -> pd.Series:
+        """Patrimônio se tudo fosse vendido em cada data, já descontado o IR."""
+        return self.patrimonio - self.imposto_latente.reindex(self.patrimonio.index).fillna(0.0)
 
 
 def datas_sinal(indice: pd.DatetimeIndex, aquecimento: int) -> list[pd.Timestamp]:
@@ -65,12 +73,20 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
     caixa = float(bt["capital_inicial"])
     colunas = precos.columns
     posicoes = np.zeros(len(colunas))   # valor em R$ por ação
-    patrimonio, registros, historico_pesos = [], [], {}
+    patrimonio, latente, registros, historico_pesos = [], [], [], {}
+    impostos = cfg.get("impostos", {})
+    ir = (ApuracaoIR(len(colunas), impostos.get("aliquota", 0.15),
+                     impostos.get("isencao_mensal_vendas", 20_000.0))
+          if impostos.get("ativo") else None)
 
     for i, d in enumerate(indice):
         if i > 0:
             posicoes *= variacoes[i]
             caixa *= 1 + retorno_caixa[i]
+            if ir is not None and d.month != indice[i - 1].month:
+                # DARF do mês anterior. Pago do caixa; se faltar, o rebalanceamento
+                # seguinte reduz as posições para cobrir.
+                caixa -= ir.fechar_mes(indice[i - 1].to_period("M"))
 
         if d in agenda:
             data_sinal = agenda[d]
@@ -92,7 +108,10 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
             giro = np.abs(vetor_pesos * total - posicoes).sum()
             custo = giro * custo_taxa
             total -= custo
-            posicoes = vetor_pesos * total
+            novas = vetor_pesos * total
+            if ir is not None:
+                ir.operar(posicoes, novas)
+            posicoes = novas
             caixa = total - posicoes.sum()
             historico_pesos[d] = pesos
             registros.append({"data_sinal": data_sinal, "data_execucao": d,
@@ -100,8 +119,12 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
                               "em_caixa": em_caixa, "ativos": ", ".join(pesos.index)})
 
         patrimonio.append(posicoes.sum() + caixa)
+        latente.append(ir.imposto_latente(posicoes) if ir is not None else 0.0)
 
     serie = pd.Series(patrimonio, index=indice, name="patrimonio")
+    serie_latente = pd.Series(latente, index=indice, name="imposto_latente")
     if agenda:
         serie = serie.loc[min(agenda):]  # descarta o aquecimento
-    return ResultadoBacktest(serie, pd.DataFrame(registros), historico_pesos)
+        serie_latente = serie_latente.loc[min(agenda):]
+    tabela_ir = ir.tabela() if ir is not None else pd.DataFrame()
+    return ResultadoBacktest(serie, pd.DataFrame(registros), historico_pesos, tabela_ir, serie_latente)

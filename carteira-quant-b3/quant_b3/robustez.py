@@ -39,22 +39,31 @@ def configuracoes(cfg: dict) -> dict[tuple[str, str], dict]:
 
 
 def rodar(precos: pd.DataFrame, volume: pd.DataFrame, cfg: dict, cdi: pd.Series,
-          progresso=print) -> dict[tuple[str, str], pd.Series]:
-    """Roda o backtest de cada configuração e devolve as curvas de patrimônio."""
+          progresso=print) -> dict[tuple[str, str], pd.DataFrame]:
+    """Roda o backtest de cada configuração.
+
+    Devolve, por configuração, um DataFrame com `pat` (patrimônio) e `lat`
+    (IR que seria pago vendendo tudo naquela data).
+    """
     fatores = calcular_fatores(precos, volume, cfg)  # janelas iguais em todas: calcula uma vez
     cfgs = configuracoes(cfg)
     curvas = {}
     for i, (chave, cfg_c) in enumerate(cfgs.items(), 1):
-        curvas[chave] = backtest.executar(precos, volume, cfg_c, cdi, fatores=fatores).patrimonio
+        res = backtest.executar(precos, volume, cfg_c, cdi, fatores=fatores)
+        curvas[chave] = pd.DataFrame({"pat": res.patrimonio,
+                                      "lat": res.imposto_latente.reindex(res.patrimonio.index).fillna(0.0)})
         if i % 10 == 0 or i == len(cfgs):
             progresso(f"  {i}/{len(cfgs)} configurações")
     return curvas
 
 
 def _cagr(serie: pd.Series) -> float:
-    serie = serie.dropna()
-    anos = (serie.index[-1] - serie.index[0]).days / 365.25
-    return (serie.iloc[-1] / serie.iloc[0]) ** (1 / anos) - 1 if anos > 0.5 else float("nan")
+    return metricas.cagr(serie)
+
+
+def _cagr_liquido(curva: pd.DataFrame) -> float:
+    """CAGR do trecho vendendo tudo no fim (desconta o IR latente da última data)."""
+    return metricas.cagr(curva["pat"], curva["lat"].iloc[-1])
 
 
 def _retornos_anuais(serie: pd.Series) -> pd.Series:
@@ -63,16 +72,17 @@ def _retornos_anuais(serie: pd.Series) -> pd.Series:
     return pd.concat([inicio, fim_ano]).pct_change().dropna()
 
 
-def grade(curvas: dict[tuple[str, str], pd.Series], cdi: pd.Series,
+def grade(curvas: dict[tuple[str, str], pd.DataFrame], cdi: pd.Series,
           benchmark: pd.Series | None, corte: pd.Timestamp) -> pd.DataFrame:
     """Métricas por configuração: calibração, validação e consistência anual."""
     linhas = []
-    for (linha, mistura), pat in curvas.items():
-        calib, valid = pat.loc[:corte], pat.loc[corte:]
+    for (linha, mistura), curva in curvas.items():
+        pat = curva["pat"]
         reg = {"linha": linha, "mistura": mistura,
-               "sharpe_calib": metricas.resumo(calib, cdi)["sharpe"],
-               "cagr_calib": _cagr(calib), "cagr_valid": _cagr(valid),
-               "cagr_total": _cagr(pat), "queda_max": metricas.drawdown(pat).min()}
+               "sharpe_calib": metricas.resumo(pat.loc[:corte], cdi)["sharpe"],
+               "cagr_calib": _cagr_liquido(curva.loc[:corte]),
+               "cagr_valid": _cagr_liquido(curva.loc[corte:]),
+               "cagr_total": _cagr_liquido(curva), "queda_max": metricas.drawdown(pat).min()}
         if benchmark is not None:
             b = benchmark.reindex(pat.index).ffill()
             ra, rb = _retornos_anuais(pat), _retornos_anuais(b)
@@ -81,26 +91,29 @@ def grade(curvas: dict[tuple[str, str], pd.Series], cdi: pd.Series,
     return pd.DataFrame(linhas)
 
 
-def walk_forward(curvas: dict[tuple[str, str], pd.Series], cdi: pd.Series,
-                 benchmark: pd.Series | None, cortes=CORTES) -> pd.DataFrame:
-    """Para cada corte: escolhe a melhor (Sharpe) antes dele e mede o depois."""
+def walk_forward(curvas: dict[tuple[str, str], pd.DataFrame], cdi: pd.Series,
+                 benchmark: pd.Series | None, cortes=CORTES, aliquota_ref: float = 0.0) -> pd.DataFrame:
+    """Para cada corte: escolhe a melhor (Sharpe) antes dele e mede o depois.
+
+    CAGRs "depois" consideram vender tudo no fim pagando IR (`aliquota_ref` nas referências).
+    """
     linhas = []
     for corte in map(pd.Timestamp, cortes):
         amostra = next(iter(curvas.values()))
         if corte <= amostra.index[0] or corte >= amostra.index[-1]:
             continue
-        sharpe = {k: metricas.resumo(p.loc[:corte], cdi)["sharpe"] for k, p in curvas.items()}
+        sharpe = {k: metricas.resumo(c["pat"].loc[:corte], cdi)["sharpe"] for k, c in curvas.items()}
         escolhida = max(sharpe, key=lambda k: -float("inf") if pd.isna(sharpe[k]) else sharpe[k])
-        depois = pd.Series({k: _cagr(p.loc[corte:]) for k, p in curvas.items()})
+        depois = pd.Series({k: _cagr_liquido(c.loc[corte:]) for k, c in curvas.items()})
         reg = {
             "corte": corte, "escolhida": f"{escolhida[0]} | {escolhida[1]}",
             "cagr_escolhida": depois[escolhida],
             "posicao": f"{int(depois.rank(ascending=False)[escolhida])}/{len(depois)}",
             "cagr_mediana": depois.median(),
-            "cdi": _cagr((1 + cdi.loc[corte:]).cumprod()),
+            "cdi": metricas.cagr_vendendo_no_fim((1 + cdi.loc[corte:]).cumprod(), aliquota_ref),
         }
         if benchmark is not None:
-            reg["cagr_bench"] = _cagr(benchmark.loc[corte:])
+            reg["cagr_bench"] = metricas.cagr_vendendo_no_fim(benchmark.loc[corte:], aliquota_ref)
         linhas.append(reg)
     return pd.DataFrame(linhas)
 

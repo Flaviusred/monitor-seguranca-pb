@@ -17,6 +17,14 @@ Opções para reduzir giro e risco (em `config.toml`):
 - **`[tendencia]`**: se o benchmark (BOVA11) estiver abaixo da média de 200 dias,
   a carteira inteira vai para o caixa.
 
+**Imposto de renda** (seção `[impostos]`): o backtest apura o IR mês a mês, como
+no swing trade em ações. São 15% sobre o lucro, com isenção no mês em que as vendas
+somam até R$ 20 mil e compensação de prejuízos, usando o preço médio. Para comparar
+de forma justa, BOVA11 e CDI pagam 15% sobre o ganho ao vender no fim do período. A
+apuração mensal fica em `resultados/impostos.csv`. O tamanho da carteira importa:
+quanto menor o capital, mais meses ficam isentos. Não considera custos no preço
+médio, IRRF, JCP nem a tributação de dividendos.
+
 O caixa rende CDI, baixado da API do Banco Central (série SGS 12). Sem acesso a ela,
 usa a taxa fixa `taxa_livre_risco_anual`. O CDI também é a referência do Sharpe.
 
@@ -133,7 +141,8 @@ Os testes usam dados sintéticos e não precisam de internet.
   sério, valide com outra fonte.
 - **Sem fatores fundamentalistas** (P/L, ROE etc.): fazer backtest com eles exige dados
   *point-in-time*, que não são gratuitos.
-- **IR**: o aviso de isenção é só um alerta. Não calcula preço médio nem imposto devido.
+- **IR**: o backtest usa regras simplificadas (veja acima). No paper trading, o aviso
+  de isenção é só um alerta, sem apuração do imposto.
 
 ## Próximos passos sugeridos
 
