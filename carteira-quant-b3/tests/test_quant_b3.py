@@ -120,3 +120,35 @@ def test_paper_trading(tmp_path):
     recarregada.registrar(ordens, pd.Timestamp("2024-04-30"))
     assert recarregada.posicoes == {"B": 500}
     assert recarregada.vendas_no_mes(pd.Timestamp("2024-04-15")) == pytest.approx(5_000)
+
+
+def test_download_tenta_de_novo_e_nao_guarda_cache_incompleto(tmp_path, monkeypatch):
+    import sys
+    import types
+    from quant_b3 import dados
+
+    datas = pd.bdate_range("2024-01-01", periods=5)
+    falhas = {"B.SA": 1, "C.SA": 99}  # B falha 1 vez; C sempre falha
+    chamadas = []
+
+    def download(tickers, threads, **kw):
+        chamadas.append((list(tickers), threads))
+        ok = []
+        for t in tickers:
+            if falhas.get(t, 0) > 0:
+                falhas[t] -= 1
+            else:
+                ok.append(t)
+        if not ok:
+            return pd.DataFrame()
+        cols = pd.MultiIndex.from_product([["Close", "Volume"], ok])
+        return pd.DataFrame(10.0, index=datas, columns=cols)
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=download))
+    monkeypatch.setattr(dados, "CACHE_DIR", tmp_path)
+
+    precos, volume = dados.baixar_yahoo(["A", "B", "C"], "2024-01-01")
+    assert list(precos.columns) == ["A", "B"]
+    assert precos.notna().all().all() and (volume == 100.0).all().all()
+    assert chamadas[1] == (["B.SA", "C.SA"], False)  # 2ª tentativa, sem paralelismo
+    assert not list(tmp_path.iterdir())  # C faltou: nada vai para o cache
