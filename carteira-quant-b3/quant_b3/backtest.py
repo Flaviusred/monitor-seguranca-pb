@@ -74,6 +74,8 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
     colunas = precos.columns
     posicoes = np.zeros(len(colunas))   # valor em R$ por ação
     patrimonio, latente, registros, historico_pesos = [], [], [], {}
+    # O capital inicial entra na primeira execução; antes disso (aquecimento) não rende.
+    primeira_execucao = min(agenda) if agenda else indice[-1]
     impostos = cfg.get("impostos", {})
     ir = (ApuracaoIR(len(colunas), impostos.get("aliquota", 0.15),
                      impostos.get("isencao_mensal_vendas", 20_000.0))
@@ -82,7 +84,8 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
     for i, d in enumerate(indice):
         if i > 0:
             posicoes *= variacoes[i]
-            caixa *= 1 + retorno_caixa[i]
+            if d > primeira_execucao:
+                caixa *= 1 + retorno_caixa[i]
             if ir is not None and d.month != indice[i - 1].month:
                 # DARF do mês anterior. Pago do caixa; se faltar, o rebalanceamento
                 # seguinte reduz as posições para cobrir.

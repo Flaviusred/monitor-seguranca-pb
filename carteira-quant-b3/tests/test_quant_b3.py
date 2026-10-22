@@ -336,3 +336,10 @@ def test_cagr_vendendo_no_fim():
     serie = pd.Series(np.linspace(100, 121, len(datas)), index=datas)
     assert metricas.cagr_vendendo_no_fim(serie, 0.0) == pytest.approx(0.10, abs=0.002)
     assert metricas.cagr_vendendo_no_fim(serie, 0.15) == pytest.approx((117.85 / 100) ** 0.5 - 1, abs=0.002)
+
+
+def test_capital_inicial_nao_rende_no_aquecimento():
+    precos, volume = dados_sinteticos()
+    res = backtest.executar(precos, volume, CFG)
+    custo_primeira = res.rebalanceamentos["custo"].iloc[0]
+    assert res.patrimonio.iloc[0] == pytest.approx(CFG["backtest"]["capital_inicial"] - custo_primeira)
