@@ -9,6 +9,17 @@ Pontuação = `peso_momentum × z(momentum) − peso_volatilidade × z(volatilid
 As `num_ativos` melhores ações (após filtros de liquidez e preço) formam a carteira,
 com pesos iguais ou pelo inverso da volatilidade.
 
+Opções para reduzir giro e risco (em `config.toml`):
+
+- **`frequencia_meses`**: rebalancear a cada N meses (ex.: 3 = trimestral).
+- **`faixa_manutencao`**: uma ação em carteira só é vendida se sair das N melhores
+  (ex.: 20). Evita trocar ações que oscilam em torno do 10º lugar.
+- **`[tendencia]`**: se o benchmark (BOVA11) estiver abaixo da média de 200 dias,
+  a carteira inteira vai para o caixa.
+
+O caixa rende CDI, baixado da API do Banco Central (série SGS 12). Sem acesso a ela,
+usa a taxa fixa `taxa_livre_risco_anual`. O CDI também é a referência do Sharpe.
+
 > ⚠️ Projeto educacional. Resultado de backtest não garante resultado futuro.
 > Não é recomendação de investimento.
 
@@ -40,7 +51,25 @@ O backtest:
 - desconta `custo_bps` sobre todo o valor negociado;
 - não compra ações sem preço no dia (deslistadas ou suspensas).
 
-### 2. Carteira do mês (paper trading)
+### 2. Comparar variações
+
+```bash
+python -m quant_b3 comparar                    # corte padrão em 01/2021
+python -m quant_b3 comparar --corte 2020-01-01
+```
+
+Roda os cenários definidos em `quant_b3/comparar.py` (só momentum, só baixa
+volatilidade, trimestral, faixa, filtro de tendência e combinações) e mostra as métricas
+separadas em dois períodos:
+
+- **Calibração** (antes do corte): use para escolher a configuração.
+- **Validação** (depois do corte): confirma se a vantagem se mantém em dados que não
+  influenciaram a escolha. Um cenário que só é bom na calibração provavelmente foi sorte.
+
+A tabela é salva em `resultados/comparacao.csv`. Para adotar um cenário, copie os
+parâmetros dele para o `config.toml`.
+
+### 3. Carteira do mês (paper trading)
 
 ```bash
 python -m quant_b3 carteira                 # mostra ranking e ordens (não grava nada)
@@ -49,7 +78,8 @@ python -m quant_b3 carteira --capital 50000 # capital inicial da simulação (1�
 ```
 
 A carteira simulada fica em `paper/` (`estado.json` e `operacoes.csv`). Rode no
-primeiro pregão de cada mês. O comando avisa quando as vendas de ações no mês
+primeiro pregão de cada mês (ou a cada `frequencia_meses`). A faixa de manutenção e o
+filtro de tendência também valem aqui. O comando avisa quando as vendas de ações no mês
 passam da isenção de R$ 20 mil do IR (swing trade).
 
 ### Dados próprios (CSV)

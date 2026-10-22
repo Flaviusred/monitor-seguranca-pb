@@ -31,10 +31,18 @@ peso_volatilidade = 0.5
 num_ativos = 10
 ponderacao = "igual"           # "igual" ou "inv_vol" (inverso da volatilidade)
 lote_minimo = 1                # 1 = mercado fracionário; 100 = lote padrão
+frequencia_meses = 1           # rebalanceia a cada N meses (1 = mensal, 3 = trimestral)
+faixa_manutencao = 10          # ação em carteira só sai se cair para fora das N melhores
+                               # (igual a num_ativos = sem faixa; 20 reduz o giro)
+
+[tendencia]
+# Se o benchmark estiver abaixo da média móvel, a carteira inteira vai para o caixa (CDI).
+ativo = false
+media_dias = 200
 
 [backtest]
 inicio = "2015-01-01"
 capital_inicial = 100_000
 custo_bps = 15                 # custo por lado em pontos-base (emolumentos + slippage)
 atraso_execucao = 1            # pregões entre o sinal (fechamento) e a execução
-taxa_livre_risco_anual = 0.11  # aproximação do CDI médio, usada no Sharpe
+taxa_livre_risco_anual = 0.11  # usada só se o CDI do Banco Central não puder ser baixado

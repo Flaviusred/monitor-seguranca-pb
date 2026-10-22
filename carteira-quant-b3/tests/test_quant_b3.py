@@ -152,3 +152,109 @@ def test_download_tenta_de_novo_e_nao_guarda_cache_incompleto(tmp_path, monkeypa
     assert precos.notna().all().all() and (volume == 100.0).all().all()
     assert chamadas[1] == (["B.SA", "C.SA"], False)  # 2ª tentativa, sem paralelismo
     assert not list(tmp_path.iterdir())  # C faltou: nada vai para o cache
+
+
+def test_faixa_mantem_acao_que_caiu_pouco_no_ranking():
+    ranking = pd.DataFrame({"volatilidade": 0.3}, index=list("ABCDEF"))
+    # E está em carteira e é a 5ª: sem faixa sai; com faixa 5 fica no lugar de B.
+    assert list(pesos_alvo(ranking, 2, atuais=["E"]).index) == ["A", "B"]
+    assert list(pesos_alvo(ranking, 2, atuais=["E"], faixa=5).index) == ["A", "E"]
+    assert list(pesos_alvo(ranking, 2, atuais=["F"], faixa=5).index) == ["A", "B"]
+
+
+def test_faixa_reduz_giro_no_backtest():
+    precos, volume = dados_sinteticos(n_ativos=15, semente=3)
+    sem = backtest.executar(precos, volume, CFG)
+    com = backtest.executar(precos, volume, {**CFG, "carteira": {**CFG["carteira"], "faixa_manutencao": 8}})
+    assert com.rebalanceamentos["giro"].sum() < sem.rebalanceamentos["giro"].sum()
+
+
+def test_trimestral_rebalanceia_a_cada_3_meses():
+    precos, volume = dados_sinteticos()
+    mensal = backtest.executar(precos, volume, CFG)
+    trim = backtest.executar(precos, volume, {**CFG, "carteira": {**CFG["carteira"], "frequencia_meses": 3}})
+    assert len(trim.rebalanceamentos) == -(-len(mensal.rebalanceamentos) // 3)
+
+
+def test_filtro_tendencia_vai_para_caixa_que_rende_cdi():
+    from quant_b3.cdi import retornos_por_pregao
+    from quant_b3.fatores import abaixo_da_media
+
+    precos, volume = dados_sinteticos()
+    queda = pd.Series(np.linspace(100, 50, len(precos)), index=precos.index)  # sempre abaixo da média
+    assert abaixo_da_media(queda, precos.index[-1], 200)
+    cdi = retornos_por_pregao(None, precos.index, 0.10)
+    cfg = {**CFG, "tendencia": {"ativo": True, "media_dias": 200}}
+    res = backtest.executar(precos, volume, cfg, cdi, queda)
+    assert res.rebalanceamentos["em_caixa"].all()
+    pat = res.patrimonio
+    anos = (pat.index[-1] - pat.index[0]).days / 365.25
+    assert (pat.iloc[-1] / pat.iloc[0]) ** (1 / anos) - 1 == pytest.approx(0.10, abs=0.01)
+
+
+def test_cdi_por_pregao_compoe_dias_sem_pregao():
+    from quant_b3.cdi import retornos_por_pregao
+
+    cdi = pd.Series(0.001, index=pd.bdate_range("2024-01-01", periods=10))
+    pregoes = cdi.index[[0, 1, 4, 9]]  # pula dias (feriados na bolsa)
+    ret = retornos_por_pregao(cdi, pregoes, 0.0)
+    assert ret.iloc[0] == 0
+    assert ret.iloc[2] == pytest.approx(1.001 ** 3 - 1)
+    assert (1 + ret).prod() == pytest.approx(1.001 ** 9)
+
+
+def test_baixar_cdi_em_partes(tmp_path, monkeypatch):
+    import sys
+    import types
+    from quant_b3 import cdi as mod_cdi
+
+    pedidos = []
+
+    class Resp:
+        def __init__(self, params):
+            ini = pd.to_datetime(params["dataInicial"], format="%d/%m/%Y")
+            fim = pd.to_datetime(params["dataFinal"], format="%d/%m/%Y")
+            self.dados = [{"data": f"{d:%d/%m/%Y}", "valor": "0.040000"}
+                          for d in pd.bdate_range(ini, fim)]
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.dados
+
+    def get(url, params, timeout):
+        pedidos.append(params)
+        return Resp(params)
+
+    monkeypatch.setitem(sys.modules, "requests", types.SimpleNamespace(get=get))
+    monkeypatch.setattr(mod_cdi, "CACHE_DIR", tmp_path)
+    serie = mod_cdi.baixar_cdi("2014-01-01")
+    assert len(pedidos) >= 3  # mais de 10 anos: várias consultas de até 5 anos
+    assert serie.index.is_monotonic_increasing and not serie.index.duplicated().any()
+    assert serie.iloc[0] == pytest.approx(0.0004)
+    assert (tmp_path / "cdi.csv").exists()
+
+
+def test_comparar_roda_todos_os_cenarios():
+    from quant_b3 import comparar
+    from quant_b3.cdi import retornos_por_pregao
+
+    precos, volume = dados_sinteticos(n_dias=1200, n_ativos=25)
+    bench = precos.mean(axis=1)
+    cdi = retornos_por_pregao(None, precos.index, 0.10)
+    tabela = comparar.rodar(precos, volume, CFG, cdi, bench, pd.Timestamp("2021-06-01"), "IDX")
+    assert set(comparar.CENARIOS) | {"IDX", "CDI"} == set(tabela.index)
+    assert tabela.loc["Base (config.toml)", ["cagr_calib", "cagr_valid"]].notna().all()
+    assert tabela.loc["CDI", "cagr_valid"] == pytest.approx(0.10, abs=0.01)
+    assert "Validação" in comparar.formatar(tabela, pd.Timestamp("2021-06-01"), precos.index[-1])
+
+
+def test_fatores_pre_calculados_dao_o_mesmo_ranking():
+    from quant_b3.fatores import calcular_fatores
+
+    precos, volume = dados_sinteticos()
+    data = precos.index[700]
+    pre = calcular_fatores(precos, volume, CFG)
+    pd.testing.assert_frame_equal(pontuar(precos, volume, data, CFG),
+                                  pontuar(precos, volume, data, CFG, pre))

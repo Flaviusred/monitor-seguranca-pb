@@ -2,13 +2,24 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 
 import pandas as pd
 
 
-def pesos_alvo(ranking: pd.DataFrame, num_ativos: int, ponderacao: str = "igual") -> pd.Series:
-    """Escolhe os `num_ativos` melhores do ranking e define os pesos (soma = 1)."""
-    escolhidos = ranking.head(num_ativos)
+def pesos_alvo(ranking: pd.DataFrame, num_ativos: int, ponderacao: str = "igual",
+               atuais: Iterable[str] = (), faixa: int | None = None) -> pd.Series:
+    """Escolhe `num_ativos` ações do ranking e define os pesos (soma = 1).
+
+    Com `faixa`, uma ação já em carteira (`atuais`) só sai se cair para fora das
+    `faixa` melhores; as vagas restantes vão para as melhores do ranking. Isso
+    reduz o giro (e os custos) em relação a sempre pegar o top `num_ativos`.
+    """
+    faixa = max(faixa or num_ativos, num_ativos)
+    atuais = set(atuais)
+    mantidos = [t for t in ranking.index[:faixa] if t in atuais][:num_ativos]
+    novos = [t for t in ranking.index if t not in mantidos][:num_ativos - len(mantidos)]
+    escolhidos = ranking.loc[[t for t in ranking.index if t in set(mantidos + novos)]]
     if escolhidos.empty:
         return pd.Series(dtype=float)
     if ponderacao == "igual":
