@@ -2,6 +2,7 @@
 
     python -m quant_b3 backtest                  # roda o backtest
     python -m quant_b3 comparar                  # compara variações da estratégia
+    python -m quant_b3 robustez                  # grade de parâmetros e walk-forward
     python -m quant_b3 carteira                  # ranking e ordens do mês (simulação)
     python -m quant_b3 carteira --registrar      # grava as ordens no paper trading
 """
@@ -18,7 +19,7 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
-from . import backtest, cdi, comparar, dados, metricas
+from . import backtest, cdi, comparar, dados, metricas, robustez
 from .carteira import gerar_ordens, pesos_alvo
 from .fatores import abaixo_da_media, pontuar
 from .paper import Carteira
@@ -134,6 +135,47 @@ def cmd_comparar(cfg: dict, args) -> None:
     print(f"Tabela salva em {saida / 'comparacao.csv'}")
 
 
+def cmd_robustez(cfg: dict, args) -> None:
+    precos, volume, precos_bench, ret_cdi = preparar(cfg, args)
+    bench = cfg["universo"]["benchmark"]
+    corte = pd.Timestamp(args.corte)
+    print("\nRodando a grade de parâmetros...")
+    curvas = robustez.rodar(precos, volume, cfg, ret_cdi)
+    g = robustez.grade(curvas, ret_cdi, precos_bench, corte)
+    wf = robustez.walk_forward(curvas, ret_cdi, precos_bench)
+
+    pct = lambda v: "" if pd.isna(v) else f"{v:.1%}"  # noqa: E731
+    num = lambda v: "" if pd.isna(v) else f"{v:.2f}"  # noqa: E731
+    fim = precos.index[-1]
+    secoes = [
+        (f"1) Sharpe na calibração (até {corte:%m/%Y})", "sharpe_calib", num),
+        (f"2) CAGR na validação ({corte:%m/%Y} a {fim:%m/%Y})", "cagr_valid", pct),
+        ("3) Queda máxima (período inteiro)", "queda_max", pct),
+    ]
+    if "anos_acima_bench" in g:
+        secoes.append((f"4) % dos anos acima do {bench} (período inteiro)", "anos_acima_bench",
+                       lambda v: "" if pd.isna(v) else f"{v:.0%}"))
+    for titulo, coluna, fmt in secoes:
+        print(f"\n{titulo}\n" + robustez.tabela_cruzada(g, coluna, fmt))
+
+    if precos_bench is not None:
+        b = precos_bench.loc[corte:].dropna()
+        print(f"\nReferência na validação: {bench} {pct(robustez._cagr(b))} | "
+              f"CDI {pct(robustez._cagr((1 + ret_cdi.loc[corte:]).cumprod()))}")
+    print("\n5) Walk-forward: escolher a melhor configuração com os dados de antes de cada corte\n"
+          "   e medir o que ela rendeu depois (posição = colocação entre todas as configurações)\n")
+    print(robustez.formatar_walk_forward(wf, bench))
+    print("\nComo ler: vizinhos com números parecidos (sem uma célula isolada muito melhor) indicam\n"
+          "robustez. No walk-forward, a escolhida deveria ficar acima da mediana e do benchmark\n"
+          "na maioria dos cortes; se não ficar, escolher pelo passado não está funcionando.")
+
+    saida = RAIZ / "resultados"
+    saida.mkdir(exist_ok=True)
+    g.to_csv(saida / "robustez_grade.csv", index=False)
+    wf.to_csv(saida / "robustez_walkforward.csv", index=False)
+    print(f"\nTabelas salvas em {saida}/robustez_*.csv")
+
+
 def cmd_carteira(cfg: dict, args) -> None:
     inicio = (date.today() - timedelta(days=550)).isoformat()
     precos, volume = carregar_dados(cfg, args, inicio)
@@ -202,6 +244,9 @@ def main() -> None:
     pcmp = sub.add_parser("comparar", help="compara variações em calibração e validação")
     pcmp.add_argument("--corte", default="2021-01-01",
                       help="data que separa calibração e validação (padrão 2021-01-01)")
+    prob = sub.add_parser("robustez", help="grade de parâmetros vizinhos e walk-forward")
+    prob.add_argument("--corte", default="2021-01-01",
+                      help="data que separa calibração e validação na grade (padrão 2021-01-01)")
     pc = sub.add_parser("carteira", help="ranking atual e ordens (paper trading)")
     pc.add_argument("--registrar", action="store_true", help="grava as ordens na simulação")
     pc.add_argument("--capital", type=float, default=100_000, help="capital inicial da simulação")
@@ -209,7 +254,8 @@ def main() -> None:
     args = p.parse_args()
 
     cfg = carregar_config(args.config)
-    {"backtest": cmd_backtest, "comparar": cmd_comparar, "carteira": cmd_carteira}[args.comando](cfg, args)
+    {"backtest": cmd_backtest, "comparar": cmd_comparar, "robustez": cmd_robustez,
+     "carteira": cmd_carteira}[args.comando](cfg, args)
 
 
 if __name__ == "__main__":

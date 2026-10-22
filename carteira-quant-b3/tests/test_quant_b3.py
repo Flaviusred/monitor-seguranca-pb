@@ -258,3 +258,31 @@ def test_fatores_pre_calculados_dao_o_mesmo_ranking():
     pre = calcular_fatores(precos, volume, CFG)
     pd.testing.assert_frame_equal(pontuar(precos, volume, data, CFG),
                                   pontuar(precos, volume, data, CFG, pre))
+
+
+def test_robustez_grade_e_walk_forward():
+    from quant_b3 import robustez
+    from quant_b3.cdi import retornos_por_pregao
+
+    precos, volume = dados_sinteticos(n_dias=2000, n_ativos=35, semente=5)
+    precos.index = pd.bdate_range("2013-01-01", periods=len(precos))
+    volume.index = precos.index
+    bench = precos.mean(axis=1)
+    cdi = retornos_por_pregao(None, precos.index, 0.10)
+    cfg = {**CFG, "backtest": {**CFG["backtest"], "inicio": "2015-01-01"}}
+
+    curvas = robustez.rodar(precos, volume, cfg, cdi, progresso=lambda _: None)
+    assert len(curvas) == len(robustez.NUM_ATIVOS) * len(robustez.FAIXA_EXTRA) * len(robustez.MISTURAS)
+
+    g = robustez.grade(curvas, cdi, bench, pd.Timestamp("2018-01-01"))
+    assert g[["sharpe_calib", "cagr_valid", "anos_acima_bench"]].notna().all().all()
+    assert "Só baixa vol" in robustez.tabela_cruzada(g, "cagr_valid", str)
+
+    wf = robustez.walk_forward(curvas, cdi, bench, ["2017-01-01", "2018-01-01", "2030-01-01"])
+    assert list(wf["corte"]) == [pd.Timestamp("2017-01-01"), pd.Timestamp("2018-01-01")]  # 2030 fora
+    # a escolhida tem mesmo o maior Sharpe antes do corte
+    from quant_b3 import metricas
+    corte = pd.Timestamp("2017-01-01")
+    melhor = max(curvas, key=lambda k: metricas.resumo(curvas[k].loc[:corte], cdi)["sharpe"])
+    assert wf.iloc[0]["escolhida"] == f"{melhor[0]} | {melhor[1]}"
+    assert "Escolhida" in robustez.formatar_walk_forward(wf, "IDX")

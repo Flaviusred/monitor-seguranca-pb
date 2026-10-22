@@ -27,11 +27,13 @@ def datas_sinal(indice: pd.DatetimeIndex, aquecimento: int) -> list[pd.Timestamp
 
 def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
              retorno_caixa: pd.Series | None = None,
-             benchmark: pd.Series | None = None) -> ResultadoBacktest:
+             benchmark: pd.Series | None = None,
+             fatores: dict[str, pd.DataFrame] | None = None) -> ResultadoBacktest:
     """Simula a estratégia.
 
     retorno_caixa: rendimento do caixa por pregão (CDI); sem ele, usa a taxa fixa
     `taxa_livre_risco_anual`. benchmark: preços usados pelo filtro de tendência.
+    fatores: resultado de `calcular_fatores`, para reaproveitar entre várias simulações.
     """
     bt, cart = cfg["backtest"], cfg["carteira"]
     tendencia = cfg.get("tendencia", {})
@@ -46,7 +48,8 @@ def executar(precos: pd.DataFrame, volume_financeiro: pd.DataFrame, cfg: dict,
         retorno_caixa = retornos_por_pregao(None, indice, bt["taxa_livre_risco_anual"])
     retorno_caixa = retorno_caixa.reindex(indice).fillna(0.0).to_numpy()
 
-    fatores = calcular_fatores(precos, volume_financeiro, cfg)
+    if fatores is None:
+        fatores = calcular_fatores(precos, volume_financeiro, cfg)
     aquecimento = cfg["fatores"]["janela_momentum"] + 1
     atraso = bt["atraso_execucao"]
     inicio = pd.Timestamp(bt["inicio"])

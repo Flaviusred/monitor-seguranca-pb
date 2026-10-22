@@ -69,7 +69,26 @@ separadas em dois períodos:
 A tabela é salva em `resultados/comparacao.csv`. Para adotar um cenário, copie os
 parâmetros dele para o `config.toml`.
 
-### 3. Carteira do mês (paper trading)
+### 3. Testar robustez
+
+```bash
+python -m quant_b3 robustez
+```
+
+Roda 40 configurações (10 a 30 ativos, com e sem faixa de manutenção, 4 combinações de
+pesos entre momentum e baixa volatilidade) e mostra:
+
+1. **Tabelas cruzadas** de Sharpe na calibração, CAGR na validação, queda máxima e % dos
+   anos acima do BOVA11. Uma configuração confiável tem vizinhos com números parecidos;
+   uma célula isolada muito melhor que as vizinhas provavelmente é sorte.
+2. **Walk-forward**: para cada corte (2019 a 2022), escolhe a configuração de melhor
+   Sharpe com os dados *anteriores* e mede quanto ela rendeu *depois*. Se a escolhida
+   não fica acima da mediana e do BOVA11 na maioria dos cortes, escolher pelo passado
+   não funciona para essa estratégia.
+
+Tabelas salvas em `resultados/robustez_grade.csv` e `resultados/robustez_walkforward.csv`.
+
+### 4. Carteira do mês (paper trading)
 
 ```bash
 python -m quant_b3 carteira                 # mostra ranking e ordens (não grava nada)
